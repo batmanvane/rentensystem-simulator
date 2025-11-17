@@ -297,6 +297,54 @@
         grid-template-columns: minmax(0, 1fr);
       }
     }
+	@media (max-width: 700px) {
+  /* Stack all slider grids */
+  .grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  /* Make metric tiles stack as well */
+  .outputs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Labels + value on small screens: go under each other */
+  .field label {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  /* Number inputs full width on small screens */
+  input[type="number"] {
+    width: 100%;
+  }
+
+  /* Slightly tighter card padding for phones */
+  .card {
+    padding: 12px 12px 14px;
+  }
+
+  /* App padding */
+  .app {
+    padding: 12px 12px 20px;
+  }
+
+  /* Shorter contour plot on phones */
+  #tauContour {
+    height: 240px;
+  }
+}
+
+@media (max-width: 500px) {
+  header {
+    align-items: flex-start;
+  }
+  h1 {
+    font-size: 1.25rem;
+  }
+}  
   </style>
 </head>
 <body>
