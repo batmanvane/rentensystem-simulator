@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Rentensystem-Simulator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- MathJax v3 -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(','\\)'], ['$', '$']],
+        displayMath: [['\\[','\\]'], ['$$','$$']]
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script id="MathJax-script" async
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  </script>
+
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color-scheme: light dark;
+      --bg: #0f172a;
+      --fg: #e5e7eb;
+      --accent: #38bdf8;
+      --card: #111827;
+      --muted: #9ca3af;
+    }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%);
+      color: var(--fg);
+      min-height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+    .app {
+      max-width: 1200px;
+      width: 100%;
+      padding: 16px 24px 32px;
+      box-sizing: border-box;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: 16px;
+    }
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      margin-bottom: 4px;
+      gap: 6px;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin: 0;
+    }
+    .subtitle {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .subtitle strong {
+      color: var(--fg);
+    }
+    .subtitle a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .subtitle a:hover {
+      text-decoration: underline;
+    }
+    .math-inline {
+      font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.95em;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 0 3px;
+      border-radius: 4px;
+    }
+    .math-block {
+      margin-top: 4px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.1), rgba(15, 23, 42, 0.9));
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.98rem;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 16px;
+      padding: 16px 18px 18px;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+    .card.full-width {
+      grid-column: 1 / -1;
+    }
+    .card h2 {
+      font-size: 1.05rem;
+      margin: 0 0 10px;
+    }
+    .card h3 {
+      font-size: 0.95rem;
+      margin: 10px 0 6px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+    }
+    .field {
+      margin-bottom: 10px;
+    }
+    .field label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+    }
+    .field span.value {
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      margin-left: 8px;
+    }
+    input[type="range"] {
+      width: 100%;
+    }
+    input[type="number"] {
+      width: 110px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.7);
+      color: var(--fg);
+      font-size: 0.85rem;
+    }
+    .outputs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .metric {
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    .metric-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+    .metric-value {
+      font-size: 0.98rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .metric-tag {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-left: 4px;
+    }
+    .scenario-groups {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .scenario-group-title {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .scenarios {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .scenario-btn {
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      background: transparent;
+      color: var(--fg);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.05s;
+    }
+    .scenario-btn:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--accent);
+    }
+    .scenario-btn:active {
+      transform: translateY(1px);
+    }
+    .scenario-btn.primary {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent);
+    }
+    #scenarioDescription {
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    #scenarioMeta {
+      margin-top: 4px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    #tauContour {
+      width: 100%;
+      height: 320px;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: #020617;
+      display: block;
+    }
+    .export-bar {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      margin-top: 8px;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .export-btn {
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--fg);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .export-btn:hover {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.15);
+    }
+    .sources-list {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .sources-list ul {
+      padding-left: 18px;
+      margin: 4px 0 0;
+    }
+    .sources-list li {
+      margin-bottom: 3px;
+    }
+    .sources-list a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .sources-list a:hover {
+      text-decoration: underline;
+    }
+    .legend-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      margin-top: 6px;
+    }
+    .legend-table th,
+    .legend-table td {
+      border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+      padding: 4px 6px;
+      text-align: left;
+    }
+    .legend-table th {
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .legend-table td:first-child {
+      width: 90px;
+      font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    .contour-caption {
+      margin-top: 6px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    @media (max-width: 880px) {
+      .app {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Rentensystem-Simulator</h1>
+      <div class="subtitle">
+        <strong>Einfaches Umlage-Modell</strong> mit Erweiterung um Aktivrente \(\gamma\) und private Vorsorge.
+      </div>
+	<div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
+  \[
+    \tau = \frac{q \cdot \rho_{\text{gesetz}} \cdot (1 - f)}{1 + \gamma q}
+  \]
+	</div>
+      <div class="subtitle">
+        mit <span class="math-inline">\(q = \dfrac{N_R}{N_C}\)</span>.
+        Detaillierte Herleitung und das private Vorsorge-Modul siehe
+        <a href="#modell-details">Modellbeschreibung</a>.
+      </div>
+      <div class="subtitle">
+        \(\tau\) ist der Beitragssatz (Anteil vom Bruttolohn), \(q\) das Verhältnis von
+        Rentnern zu Beitragszahlern, \(\rho_{\text{gesetz}}\) das gesetzliche Rentenniveau (durchschnittliche
+        Rente in&nbsp;% des Lohns), \(f\) der Anteil der Rentenausgaben, der
+        aus Steuern finanziert wird, und \(\gamma\) misst die beitragspflichtige Erwerbsintensität
+        der Rentner (Aktivrente). Eine zusätzliche private Rente wird über \(\rho_{\text{priv}}\) modelliert.
+      </div>
+    </header>
+
+    <!-- EINGABEN -->
+    <section class="card">
+      <h2>Eingaben</h2>
+      <div class="grid-2">
+        <div>
+          <div class="field">
+            <label>
+              Beitragszahler \(N_C\) <span class="value" id="ncLabel"></span>
+            </label>
+            <input id="nc" type="range" min="10" max="60" step="1" />
+          </div>
+          <div class="field">
+            <label>
+              Rentner \(N_R\) <span class="value" id="nrLabel"></span>
+            </label>
+            <input id="nr" type="range" min="5" max="30" step="1" />
+          </div>
+          <div class="field">
+            <label>
+              Durchschnittslohn je Beitragszahler (k€ / Jahr)
+              <span class="value" id="wLabel"></span>
+            </label>
+            <input id="w" type="range" min="20" max="80" step="1" />
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <label>
+              Gesetzliches Rentenniveau \(\rho_{\text{gesetz}}\) (% vom Lohn)
+              <span class="value" id="rhoLabel"></span>
+            </label>
+            <input id="rho" type="range" min="30" max="60" step="1" />
+          </div>
+          <div class="field">
+            <label>
+              Steueranteil \(f\) (% der Rentenausgaben)
+              <span class="value" id="fLabel"></span>
+            </label>
+            <input id="f" type="range" min="0" max="60" step="1" />
+          </div>
+          <div class="field">
+            <label>
+              Aktivrente \(\gamma\) (% zusätzliche Beitragskapazität der Rentner)
+              <span class="value" id="gammaLabel"></span>
+            </label>
+            <input id="gamma" type="range" min="0" max="20" step="1" />
+          </div>
+          <div class="field">
+            <label>
+              Beitragssatz \(\tau\) vorgeben (optional, %)
+              <span class="value" id="tauOverrideLabel">auto</span>
+            </label>
+            <input id="tauOverride" type="number" min="0" max="40" step="0.1"
+                   placeholder="auto" />
+          </div>
+        </div>
+      </div>
+
+      <h3>Private Vorsorge (vereinfachtes Sparmodell)</h3>
+      <div class="grid-2">
+        <div>
+          <div class="field">
+            <label>
+              Sparquote \(s\) (% vom Jahreslohn)
+              <span class="value" id="sPrivLabel"></span>
+            </label>
+            <input id="sPriv" type="range" min="0" max="20" step="1" />
+          </div>
+          <div class="field">
+            <label>
+              reale Rendite \(r\) (% p.a.)
+              <span class="value" id="rPrivLabel"></span>
+            </label>
+            <input id="rPriv" type="range" min="0" max="5" step="0.25" />
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <label>
+              Beitragsjahre \(T_C\) (Sparphase)
+              <span class="value" id="TcPrivLabel"></span>
+            </label>
+            <input id="TcPriv" type="range" min="20" max="45" step="1" />
+          </div>
+          <div class="field">
+            <label>
+              Rentenjahre \(T_R\)
+              <span class="value" id="TrPrivLabel"></span>
+            </label>
+            <input id="TrPriv" type="range" min="10" max="30" step="1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="scenario-groups">
+        <div>
+          <div class="scenario-group-title">Aktuelle Situation & Gesetzgebung</div>
+          <div class="scenarios">
+            <button class="scenario-btn primary" data-scenario="statusQuoDE">
+              Status quo (2024)
+            </button>
+            <button class="scenario-btn" data-scenario="rentenpaket">
+              Rentenpaket Haltelinie (2031)
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div class="scenario-group-title">Demografie, Aktivrente & Reformoptionen</div>
+          <div class="scenarios">
+            <button class="scenario-btn" data-scenario="demography2035">
+              Demografie ohne Reform (2035)
+            </button>
+            <button class="scenario-btn" data-scenario="laterRetirement">
+              Späterer Rentenbeginn / Aktivrente
+            </button>
+            <button class="scenario-btn" data-scenario="boomerSoli">
+              „Boomer-Soli“ (hohe Steuerfinanzierung)
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div class="scenario-group-title">Rentenmix & radikale Varianten (didaktisch)</div>
+          <div class="scenarios">
+            <button class="scenario-btn" data-scenario="lowBenefit">
+              Niedriges gesetzl. Niveau + hohe private Vorsorge
+            </button>
+            <button class="scenario-btn" data-scenario="noTaxes">
+              Keine Steuerfinanzierung \(f = 0\)
+            </button>
+            <button class="scenario-btn" data-scenario="maxTaxes">
+              Hohe Steuerfinanzierung \(f = 60\,\%\)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="scenarioMeta"></div>
+      <div id="scenarioDescription"></div>
+    </section>
+
+    <!-- ERGEBNISSE & KONTURPLOT -->
+    <section class="card">
+      <h2>Ergebnisse</h2>
+      <div class="outputs">
+        <div class="metric">
+          <div class="metric-label">Erforderlicher Beitragssatz \(\tau\)</div>
+          <div class="metric-value">
+            <span id="tauOut"></span> %
+            <span class="metric-tag">(Modell, mit \(\gamma\))</span>
+          </div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Impliziter Steueranteil \(f\)</div>
+          <div class="metric-value">
+            <span id="fOut"></span> %
+            <span class="metric-tag">(aus vorgegebenem \(\tau\))</span>
+          </div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Rentenausgaben \(A\)</div>
+          <div class="metric-value"><span id="AOut"></span> Mrd. €</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Beitragsvolumen \(B\)</div>
+          <div class="metric-value"><span id="BOut"></span> Mrd. €</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Steuerzuschuss \(S\)</div>
+          <div class="metric-value"><span id="SOut"></span> Mrd. €</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Abhängigkeitsquotient \(q = N_R/N_C\)</div>
+          <div class="metric-value"><span id="qOut"></span></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Gesetzliches Rentenniveau \(\rho_{\text{gesetz}}\)</div>
+          <div class="metric-value"><span id="rhoGesOut"></span> %</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Private Ersatzrate \(\rho_{\text{priv}}\)</div>
+          <div class="metric-value"><span id="rhoPrivOut"></span> %</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Gesamt-Ersatzrate \(\rho_{\text{gesamt}}\)</div>
+          <div class="metric-value"><span id="rhoTotOut"></span> %</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Private Jahresrente \(P_{\text{priv}}\)</div>
+          <div class="metric-value"><span id="PprivOut"></span> k€</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Kapital bei Renteneintritt \(K\)</div>
+          <div class="metric-value"><span id="KprivOut"></span> k€</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:12px;">Konturdiagramm \(\tau(q,f)\)</h3>
+
+      <canvas id="tauContour"></canvas>
+      <div class="contour-caption" id="contourCaption">
+        Farbskala: Beitragssatz \(\tau\) in Prozent. x-Achse: Abhängigkeitsquotient
+        <span class="math-inline">\(q = N_R/N_C\)</span> (mehr Rentner pro Beitragszahler nach rechts),
+        y-Achse: Steueranteil <span class="math-inline">\(f\)</span> (mehr Steuerfinanzierung nach oben).<br/>
+        Der weiße Punkt markiert die aktuelle Konfiguration der Eingaben \((q, f)\).<br/>
+        Iso-Linien zeigen Kombinationen aus \(q\), \(f\) und Aktivrente \(\gamma\), die zu ähnlichen
+        Beitragssätzen \(\tau\) führen. Die private Vorsorge \(\rho_{\text{priv}}\) wirkt auf einer
+        zweiten Ebene: Sie verändert das gesamte Alterseinkommen, aber nicht direkt die Umlageformel.
+      </div>
+
+      <div class="export-bar">
+        <button id="exportChartBtn" class="export-btn">
+          Grafik als PNG exportieren
+        </button>
+      </div>
+    </section>
+
+    <!-- MODELLBESCHREIBUNG & QUELLEN -->
+    <section class="card full-width" id="modell-details">
+      <h2>Modellbeschreibung & Quellen</h2>
+
+      <h3>Symbollegende</h3>
+      <table class="legend-table">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Bedeutung</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>\(\tau\)</td><td>Beitragssatz (Anteil vom Bruttolohn)</td></tr>
+          <tr><td>\(q\)</td>
+              <td>Abhängigkeitsquotient,
+                <span class="math-inline">\(q = \dfrac{N_R}{N_C}\)</span>
+              </td></tr>
+          <tr><td>\(\rho_{\text{gesetz}}\)</td><td>Gesetzliches Rentenniveau (Verhältnis durchschnittliche gesetzliche Rente / durchschnittlicher Lohn)</td></tr>
+          <tr><td>\(\rho_{\text{priv}}\)</td><td>Ersatzrate aus privater Vorsorge (Verhältnis zusätzliche private Jahresrente / durchschnittlicher Lohn)</td></tr>
+          <tr><td>\(\rho_{\text{gesamt}}\)</td><td>Gesamt-Ersatzrate im Alter,
+            <span class="math-inline">\(\rho_{\text{gesamt}} = \rho_{\text{gesetz}} + \rho_{\text{priv}}\)</span></td></tr>
+          <tr><td>\(f\)</td><td>Steueranteil an den Rentenausgaben (z.&nbsp;B. Bundeszuschüsse)</td></tr>
+          <tr><td>\(\gamma\)</td><td>Aktivrente-Parameter: beitragspflichtige Erwerbsintensität der Rentner (in Einheiten von Vollzeit; z.&nbsp;B. \(\gamma=0{,}1\) bedeutet effektiv 10&nbsp;% zusätzliche Vollzeitbeitragszahler je 100 Rentner)</td></tr>
+          <tr><td>\(N_C\)</td><td>Anzahl der Beitragszahler (im Tool in Mio.)</td></tr>
+          <tr><td>\(N_R\)</td><td>Anzahl der Rentnerinnen und Rentner (im Tool in Mio.)</td></tr>
+          <tr><td>\(\bar w\)</td><td>Durchschnittlicher Jahreslohn pro Beitragszahler</td></tr>
+          <tr><td>\(\bar p\)</td><td>Durchschnittliche Jahresrente pro Rentner (gesetzliche Säule)</td></tr>
+          <tr><td>\(A\)</td><td>Gesamte Rentenausgaben (gesetzliche Säule)</td></tr>
+          <tr><td>\(B\)</td><td>Beitragsaufkommen (Summe der Beitragseinnahmen aus Erwerbsarbeit inkl. Aktivrente)</td></tr>
+          <tr><td>\(S\)</td><td>Steuerzuschuss (vom Staat aufgebrachter Anteil)</td></tr>
+          <tr><td>\(s\)</td><td>Sparquote für private Vorsorge (Anteil des Lohns, der privat gespart wird)</td></tr>
+          <tr><td>\(r\)</td><td>Reale Verzinsung der privaten Ersparnisse (p.a.)</td></tr>
+          <tr><td>\(T_C\)</td><td>Dauer der Sparphase (Beitragsjahre)</td></tr>
+          <tr><td>\(T_R\)</td><td>Dauer der Rentenphase (Rentenjahre)</td></tr>
+          <tr><td>\(K\)</td><td>Privates Kapital bei Renteneintritt</td></tr>
+          <tr><td>\(P_{\text{priv}}\)</td><td>Jährliche private Rente (Annuität aus \(K\))</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Herleitung des einfachen Umlage-Modells</h3>
+      <p class="sources-list" style="line-height:1.45;">
+        Im Umlageverfahren werden die laufenden Renten aus den laufenden Beiträgen
+        und Steuerzuschüssen finanziert. Sei \(N_C\) die Zahl der Beitragszahler,
+        \(N_R\) die Zahl der Rentner, \(\bar w\) der durchschnittliche Jahreslohn
+        pro Beitragszahler, \(\bar p\) die durchschnittliche Jahresrente pro Rentner,
+        \(\tau\) der Beitragssatz und \(f\) der Anteil der Rentenausgaben, der aus
+        Steuern finanziert wird.
+      </p>
+      <p class="sources-list" style="line-height:1.45;">
+        Gesamtausgaben für gesetzliche Renten:
+        <span class="math-inline">\(A = N_R \cdot \bar p\)</span>.<br/>
+        Einnahmen aus Beiträgen (ohne Aktivrente):
+        <span class="math-inline">\(E_{\text{Beitrag}} = \tau \cdot \bar w \cdot N_C\)</span>.<br/>
+        Steuerzuschuss:
+        <span class="math-inline">\(E_{\text{Steuer}} = f \cdot A\)</span>.<br/>
+        Es gilt:
+        <span class="math-inline">\(E_{\text{Beitrag}} + E_{\text{Steuer}} = A\)</span>.
+      </p>
+      <p class="sources-list" style="line-height:1.45;">
+        Einsetzen und Umformen ergibt:
+      </p>
+      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
+        \[
+        \tau \,\bar w\, N_C + f\, N_R\, \bar p = N_R\, \bar p
+        \]
+        \[
+        \Rightarrow \quad
+        \tau = \frac{N_R}{N_C} \cdot \frac{\bar p}{\bar w} \cdot (1 - f)
+        \]
+      </div>
+      <p class="sources-list" style="line-height:1.45;">
+        Definiert man das gesetzliche Rentenniveau
+        \(\rho_{\text{gesetz}} = \bar p / \bar w\) und den Abhängigkeitsquotienten
+        \(q = N_R / N_C\), erhält man das einfache Umlage-Modell:
+      </p>
+          <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
+        \[
+        \tau = q \cdot \rho_{\text{gesetz}} \cdot (1 - f)
+        \]
+      </div>
+      <p class="sources-list" style="line-height:1.45;">
+        Dieses Modell nimmt implizit an, dass Rentner keine Beiträge zahlen und alle Beitragszahler
+        nicht im Rentenbezug sind. Steigt \(q\) (mehr Rentner pro Beitragszahler), bleibt
+        \(\rho_{\text{gesetz}}\) hoch und \(f\) niedrig, muss \(\tau\) steigen.
+      </p>
+
+      <h3>Erweiterung: Aktivrente \(\gamma\)</h3>
+      <p class="sources-list" style="line-height:1.45;">
+        Mit Aktivrente wird angenommen, dass ein Teil der Rentner weiter arbeitet und Beiträge zahlt.
+        Sei \(\gamma\) die beitragspflichtige Erwerbsintensität der Rentner, gemessen in Einheiten von
+        Vollzeitbeschäftigung: \(\gamma N_R\) verhält sich also so, als gäbe es so viele zusätzliche
+        „virtuelle“ Vollzeit-Beitragszahler.
+      </p>
+      <p class="sources-list" style="line-height:1.45;">
+        Dann ist die beitragspflichtige Lohnsumme
+        <span class="math-inline">\(L = \bar w \,(N_C + \gamma N_R)\)</span> und die Beitragseinnahmen sind
+        <span class="math-inline">\(E_{\text{Beitrag}} = \tau \, L = \tau \,\bar w\,(N_C + \gamma N_R)\)</span>.
+        Mit \(A = N_R \bar p\) und \(E_{\text{Steuer}} = fA\) gilt:
+      </p>
+      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:500px;">
+        \[
+        \tau \,\bar w\,(N_C + \gamma N_R) + f\, N_R \bar p = N_R \bar p
+        \]
+        \[
+        \Rightarrow \quad
+        \tau \,\bar w\,(N_C + \gamma N_R) = (1-f) N_R \bar p
+        \]
+        \[
+        \Rightarrow \quad
+        \tau = \frac{N_R}{N_C} \cdot \frac{\bar p}{\bar w} \cdot \frac{(1-f)}{1 + \gamma \frac{N_R}{N_C}}
+        = \frac{q \cdot \rho_{\text{gesetz}} \cdot (1-f)}{1 + \gamma q}
+        \]
+      </div>
+      <p class="sources-list" style="line-height:1.45;">
+        Für \(\gamma = 0\) erhält man wieder das einfache Umlage-Modell (Annahme: Rentner zahlen keine Beiträge).
+        Je größer \(\gamma\), desto stärker verschiebt die Aktivrente die demografische Last, weil ein Teil der
+        Rentner wieder zur Beitragsbasis gehört.
+      </p>
+
+      <h3>Modellansatz Eigenvorsorge: private Ersatzrate \(\rho_{\text{priv}}\)</h3>
+      <p class="sources-list" style="line-height:1.45;">
+        Zusätzlich wird eine private Vorsorgesäule modelliert: Individuen sparen jedes Jahr einen Anteil
+        \(s\) ihres Lohns, erzielen eine reale Rendite \(r\) und beziehen später aus dem angesparten Kapital
+        eine private Rente. Dieses Modul wirkt auf einer <strong>anderen Ebene</strong>:
+        Die Umlageformel bestimmt die Finanzierungslogik der gesetzlichen Säule, während die private Säule
+        das Gesamtalterseinkommen ergänzt.
+      </p>
+      <p class="sources-list" style="line-height:1.45;">
+        Annahmen:
+      </p>
+      <ul class="sources-list">
+        <li>Jährliche Sparleistung: \(s \,\bar w\).</li>
+        <li>Sparphase über \(T_C\) Jahre mit realer Rendite \(r\).</li>
+        <li>Rentenphase über \(T_R\) Jahre; das angesparte Kapital wird als Annuität verrentet.</li>
+      </ul>
+      <p class="sources-list" style="line-height:1.45;">
+        Kapital bei Renteneintritt:
+        <span class="math-inline">
+          \(K = s \,\bar w \,\dfrac{(1+r)^{T_C} - 1}{r}\)
+        </span>
+        (für \(r &gt; 0\); für \(r=0\) reduziert sich das auf \(K = s \,\bar w\, T_C\)).
+        Die jährliche private Rente als Annuität ist
+        <span class="math-inline">
+          \(P_{\text{priv}} = K \cdot \dfrac{r}{1 - (1+r)^{-T_R}}\)
+        </span>.
+      </p>
+      <p class="sources-list" style="line-height:1.45;">
+        Die private Ersatzrate ist dann
+      </p>
+      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
+        \[
+        \rho_{\text{priv}} = \frac{P_{\text{priv}}}{\bar w}
+        = s \cdot \frac{[(1+r)^{T_C} - 1]/r}{1 - (1+r)^{-T_R}}.
+        \]
+      </div>
+      <p class="sources-list" style="line-height:1.45;">
+        Die Gesamt-Ersatzrate im Alter ergibt sich aus gesetzlicher und privater Säule:
+        <span class="math-inline">\(\rho_{\text{gesamt}} = \rho_{\text{gesetz}} + \rho_{\text{priv}}\)</span>.
+        Im Tool wird \(\rho_{\text{gesetz}}\) in der Umlageformel genutzt, \(\rho_{\text{priv}}\) dient zur
+        Beurteilung des gesamten Alterseinkommens. Ein wichtiger didaktischer Punkt ist, dass
+        private Vorsorge zwar das individuelle Alterseinkommen erhöhen und politische Spielräume
+        bei \(\rho_{\text{gesetz}}\) eröffnen kann, aber <strong>die Umlagemechanik selbst</strong> (insbesondere die
+        demografische Relation \(q\)) dadurch nicht verschwindet.
+      </p>
+
+      <h3>Konturdiagramm \(\tau(q,f)\)</h3>
+      <p class="sources-list" style="line-height:1.45;">
+        Das Konturdiagramm zeigt den Beitragssatz \(\tau\) in Abhängigkeit vom Abhängigkeitsquotienten
+        \(q = N_R/N_C\) (x-Achse) und dem Steueranteil \(f\) (y-Achse) für das aktuell gewählte gesetzliche
+        Rentenniveau \(\rho_{\text{gesetz}}\) und die Aktivrente \(\gamma\). Iso-Linien verbinden Zustände
+        mit ähnlichem \(\tau\). Der weiße Punkt markiert die aktuelle Wahl von \(q\) und \(f\).
+      </p>
+      <p class="sources-list" style="line-height:1.45;">
+        Die private Vorsorge-Ebene (\(\rho_{\text{priv}}, \rho_{\text{gesamt}}\)) wird separat berechnet
+        und in den Kennzahlen ausgegeben; sie beeinflusst das Konturdiagramm nicht direkt, da dieses die
+        reine Umlagefinanzierung visualisiert.
+      </p>
+
+      <h3>Datengrundlagen der voreingestellten Szenarien</h3>
+      <p class="sources-list">
+        Die voreingestellten Werte sind gerundete, didaktisch vereinfachte
+        Größen (z.&nbsp;B. 40&nbsp;Mio. Beitragszahler, 21&nbsp;Mio. Rentner,
+        Rentenniveau 48&nbsp;%, Steueranteil 30&nbsp;%, moderate Aktivrente und Sparquoten).
+        Sie orientieren sich u.&nbsp;a. an:
+      </p>
+      <div class="sources-list">
+        <ul>
+          <li><a href="https://jahresbericht.deutsche-rentenversicherung.de/" target="_blank" rel="noopener">Deutsche Rentenversicherung – Jahresbericht</a></li>
+          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Statistikpublikationen/statistikpublikationen_node.html" target="_blank" rel="noopener">Deutsche Rentenversicherung – „Rentenversicherung in Zahlen“</a></li>
+          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Berichte/versichertenbericht_node.html" target="_blank" rel="noopener">Versichertenbericht der Deutschen Rentenversicherung</a></li>
+          <li><a href="https://www.destatis.de/DE/Themen/Querschnitt/Demografischer-Wandel/_inhalt.html" target="_blank" rel="noopener">Statistisches Bundesamt (Destatis) – Demografischer Wandel</a></li>
+          <li><a href="https://www.bmas.de/DE/Soziales/Rente-und-Altersvorsorge/rentenversicherungsbericht-art.html" target="_blank" rel="noopener">BMAS – Rentenversicherungsbericht / Alterssicherungsbericht</a></li>
+          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Berichte/rentenatlas_node.html" target="_blank" rel="noopener">Rentenatlas der Deutschen Rentenversicherung</a></li>
+        </ul>
+      </div>
+      <p class="sources-list" style="margin-top:6px;">
+        Hinweis: Die im Tool verwendeten Werte sind bewusst gerundet und abstrahiert,
+        um die Modellmechanik und die zwei Ebenen (Umlagesystem vs. Eigenvorsorge) zu verdeutlichen.
+        Für belastbare politische Analysen sollten die Originalberichte im Detail ausgewertet und
+        ggf. komplexere Modelle (mit Kohorten, Erwerbsbiografien, verschiedenen Rentenarten etc.)
+        eingesetzt werden.
+      </p>
+    </section>
+  </div>
+
+  <script>
+    const fmtPct = (x) => (isFinite(x) ? x.toFixed(1) : "–");
+    const fmtBn  = (x) => (isFinite(x) ? x.toFixed(1) : "–");
+    const fmtRat = (x) => (isFinite(x) ? x.toFixed(3) : "–");
+    const fmtK   = (x) => (isFinite(x) ? x.toFixed(1) : "–");
+
+    const nc       = document.getElementById("nc");
+    const nr       = document.getElementById("nr");
+    const w        = document.getElementById("w");
+    const rho      = document.getElementById("rho");
+    const f        = document.getElementById("f");
+    const gamma    = document.getElementById("gamma");
+    const tauOv    = document.getElementById("tauOverride");
+
+    const sPriv    = document.getElementById("sPriv");
+    const rPriv    = document.getElementById("rPriv");
+    const TcPriv   = document.getElementById("TcPriv");
+    const TrPriv   = document.getElementById("TrPriv");
+
+    const ncLabel  = document.getElementById("ncLabel");
+    const nrLabel  = document.getElementById("nrLabel");
+    const wLabel   = document.getElementById("wLabel");
+    const rhoLabel = document.getElementById("rhoLabel");
+    const fLabel   = document.getElementById("fLabel");
+    const gammaLabel = document.getElementById("gammaLabel");
+    const tauOvLbl = document.getElementById("tauOverrideLabel");
+
+    const sPrivLabel  = document.getElementById("sPrivLabel");
+    const rPrivLabel  = document.getElementById("rPrivLabel");
+    const TcPrivLabel = document.getElementById("TcPrivLabel");
+    const TrPrivLabel = document.getElementById("TrPrivLabel");
+
+    const tauOut = document.getElementById("tauOut");
+    const fOut   = document.getElementById("fOut");
+    const AOut   = document.getElementById("AOut");
+    const BOut   = document.getElementById("BOut");
+    const SOut   = document.getElementById("SOut");
+    const qOut   = document.getElementById("qOut");
+
+    const rhoGesOut = document.getElementById("rhoGesOut");
+    const rhoPrivOut = document.getElementById("rhoPrivOut");
+    const rhoTotOut = document.getElementById("rhoTotOut");
+    const PprivOut  = document.getElementById("PprivOut");
+    const KprivOut  = document.getElementById("KprivOut");
+
+    const scenarioDescription = document.getElementById("scenarioDescription");
+    const scenarioMeta = document.getElementById("scenarioMeta");
+    const contourCanvas = document.getElementById("tauContour");
+    const exportChartBtn = document.getElementById("exportChartBtn");
+
+    const contourCaption = document.getElementById("contourCaption");
+
+    const scenarioTexts = {
+      statusQuoDE: {
+        title: "Status quo (2024)",
+        year: "2024",
+        desc: "Heutige Größenordnung: ca. 40 Mio. Beitragszahler gegenüber 21 Mio. Rentnern, durchschnittlicher Jahreslohn 50 k€, gesetzliches Rentenniveau 48 %, Steueranteil 30 %, kaum Aktivrente (γ ≈ 2 %) und moderate private Vorsorge (Sparquote 5 %). Das Modell zeigt, wie hoch der Beitragssatz τ bei dieser Ausgangslage liegt und welchen Beitrag die private Säule leisten könnte."
+      },
+      rentenpaket: {
+        title: "Rentenpaket: Haltelinie 48 % (bis 2031)",
+        year: "2031",
+        desc: "Rentenpaket mit Haltelinie bei 48 %: etwas ungünstigeres Verhältnis von Beitragszahlern zu Rentnern und ein höherer Steueranteil (35 %). Aktivrente und private Vorsorge sind leicht erhöht. Das gesetzliche Rentenniveau wird politisch stabil gehalten, was höhere Beiträge oder mehr Steuern erfordert – die private Säule entlastet das Gesamteinkommen im Alter, aber ändert die Umlagelogik nur indirekt."
+      },
+      demography2035: {
+        title: "Demografie 2035 ohne Reform",
+        year: "2035",
+        desc: "Demografie 2035 ohne zusätzliche Reformen: Verhältnis etwa 2 Beitragszahler auf 1 Rentner. Gesetzliches Rentenniveau und Steueranteil bleiben gleich, Aktivrente und private Vorsorge ändern sich kaum. Das erhöht den erforderlichen Beitragssatz τ deutlich – hier wird der demografische Druck bei unveränderten Leistungszusagen sichtbar."
+      },
+      laterRetirement: {
+        title: "Reform: späterer Rentenbeginn / Aktivrente",
+        year: "ca. 2035+",
+        desc: "Reformszenario: späterer Rentenbeginn, höhere Erwerbsbeteiligung Älterer (höheres γ) und etwas stärkere private Vorsorge. Mehr Beitragszahler und ein relevanter Anteil aktiv arbeitender Rentner verbessern q und die effektive Beitragsbasis. Das entlastet den Beitragssatz τ, obwohl das gesetzliche Rentenniveau gehalten wird."
+      },
+      boomerSoli: {
+        title: "„Boomer-Soli“: höherer Steueranteil",
+        year: "2030er",
+        desc: "„Boomer-Soli“: der Steueranteil f steigt deutlich (z. B. 40 %), während das gesetzliche Rentenniveau bei 48 % bleibt und der Beitragssatz politisch bei etwa 18 % gedeckelt wird. Aktivrente und private Vorsorge sind moderat. Das Modell zeigt, wie groß der Steuerzuschuss S aus dem Bundeshaushalt dann sein müsste und wie private Vorsorge die Gesamt-Ersatzrate ergänzt."
+      },
+      lowBenefit: {
+        title: "Rentenmix: niedriges gesetzliches Niveau + hohe private Vorsorge",
+        year: "theoretisch",
+        desc: "Rentenmix-Szenario: das gesetzliche Rentenniveau wird auf 35 % abgesenkt, dafür steigt die private Sparquote deutlich (z. B. 10 %) bei moderater Rendite. Das System wird zum Teil über eine Reduktion der gesetzlichen Leistungen stabilisiert – Beitragssatz und Steuerzuschuss sinken, während ein größerer Teil des Alterseinkommens über private Vorsorge kommt."
+      },
+      noTaxes: {
+        title: "Radikal: keine Steuerfinanzierung f = 0",
+        year: "theoretisch",
+        desc: "Radikal: keine Steuerfinanzierung (f = 0). Alle Renten werden vollständig aus Beiträgen finanziert. Aktivrente und private Vorsorge sind moderat. Das Modell zeigt, wie hoch der Beitragssatz τ steigen müsste, wenn der Bundeszuschuss entfällt – und macht sichtbar, dass höhere private Vorsorge zwar das Alterseinkommen verbessert, aber die Umlagelast nicht direkt ersetzt."
+      },
+      maxTaxes: {
+        title: "Radikal: hohe Steuerfinanzierung f = 60 %",
+        year: "theoretisch",
+        desc: "Radikal: 60 % der Rentenausgaben werden steuerfinanziert. Der Beitragssatz τ kann stark sinken, aber der Steuerzuschuss S steigt massiv. Die Last verlagert sich vom Faktor Arbeit auf den allgemeinen Steuerzahler und den Bundeshaushalt. Aktivrente und private Vorsorge sind moderat, so dass sich gut zeigen lässt, wie sich die drei Stellschrauben (q, f, γ, sowie gesetzlich vs. privat) gegenseitig beeinflussen."
+      }
+    };
+
+    function applyScenario(name) {
+      if (name === "statusQuoDE") {
+        nc.value = 40;
+        nr.value = 21;
+        w.value = 50;
+        rho.value = 48;
+        f.value = 30;
+        gamma.value = 2;
+        tauOv.value = "";
+        sPriv.value = 5;
+        rPriv.value = 2;
+        TcPriv.value = 40;
+        TrPriv.value = 20;
+      } else if (name === "rentenpaket") {
+        nc.value = 38;
+        nr.value = 22;
+        w.value = 51;
+        rho.value = 48;
+        f.value = 35;
+        gamma.value = 3;
+        tauOv.value = "";
+        sPriv.value = 6;
+        rPriv.value = 2;
+        TcPriv.value = 40;
+        TrPriv.value = 20;
+      } else if (name === "demography2035") {
+        nc.value = 40;
+        nr.value = 20;
+        w.value = 52;
+        rho.value = 48;
+        f.value = 30;
+        gamma.value = 2;
+        tauOv.value = "";
+        sPriv.value = 5;
+        rPriv.value = 2;
+        TcPriv.value = 40;
+        TrPriv.value = 20;
+      } else if (name === "laterRetirement") {
+        nc.value = 42;
+        nr.value = 18;
+        w.value = 52;
+        rho.value = 48;
+        f.value = 30;
+        gamma.value = 6;
+        tauOv.value = "";
+        sPriv.value = 6;
+        rPriv.value = 2.5;
+        TcPriv.value = 42;
+        TrPriv.value = 18;
+      } else if (name === "boomerSoli") {
+        nc.value = 40;
+        nr.value = 21;
+        w.value = 50;
+        rho.value = 48;
+        f.value = 40;
+        gamma.value = 3;
+        tauOv.value = 18.0;
+        sPriv.value = 5;
+        rPriv.value = 2;
+        TcPriv.value = 40;
+        TrPriv.value = 20;
+      } else if (name === "lowBenefit") {
+        nc.value = 40;
+        nr.value = 21;
+        w.value = 50;
+        rho.value = 35;
+        f.value = 30;
+        gamma.value = 2;
+        tauOv.value = "";
+        sPriv.value = 10;
+        rPriv.value = 3;
+        TcPriv.value = 40;
+        TrPriv.value = 20;
+      } else if (name === "noTaxes") {
+        nc.value = 40;
+        nr.value = 21;
+        w.value = 50;
+        rho.value = 48;
+        f.value = 0;
+        gamma.value = 2;
+        tauOv.value = "";
+        sPriv.value = 5;
+        rPriv.value = 2;
+        TcPriv.value = 40;
+        TrPriv.value = 20;
+      } else if (name === "maxTaxes") {
+        nc.value = 40;
+        nr.value = 21;
+        w.value = 50;
+        rho.value = 48;
+        f.value = 60;
+        gamma.value = 2;
+        tauOv.value = 15.0;
+        sPriv.value = 5;
+        rPriv.value = 2;
+        TcPriv.value = 40;
+        TrPriv.value = 20;
+      }
+
+      const meta = scenarioTexts[name];
+      if (meta) {
+        scenarioMeta.textContent = `Szenario: ${meta.title} (Jahr: ${meta.year})`;
+        scenarioDescription.textContent = meta.desc;
+      } else {
+        scenarioMeta.textContent = "";
+        scenarioDescription.textContent = "";
+      }
+      update();
+    }
+
+    function drawContour() {
+      const ctx = contourCanvas.getContext("2d");
+      const width = contourCanvas.clientWidth;
+      const height = contourCanvas.clientHeight;
+      contourCanvas.width = width * window.devicePixelRatio;
+      contourCanvas.height = height * window.devicePixelRatio;
+      ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+
+      ctx.clearRect(0, 0, width, height);
+
+      const paddingLeft = 55;
+      const paddingRight = 70;
+      const paddingTop = 20;
+      const paddingBottom = 35;
+
+      const plotW = width - paddingLeft - paddingRight;
+      const plotH = height - paddingTop - paddingBottom;
+      if (plotW <= 0 || plotH <= 0) return;
+
+      const rhoLawPct = Number(rho.value);
+      const rhoLawDec = rhoLawPct / 100;
+      const fSliderPct = Number(f.value);
+      const fCurr = fSliderPct / 100;
+
+      const NC = Number(nc.value);
+      const NR = Number(nr.value);
+      const qCurr = NR / NC;
+
+      const gammaDec = Number(gamma.value) / 100;
+
+      const tauOverrideVal = tauOv.value === "" ? null : Number(tauOv.value);
+      const useTauOv = tauOverrideVal !== null && !Number.isNaN(tauOverrideVal);
+
+      const nx = 90;
+      const ny = 90;
+
+      let minTau = Infinity;
+      let maxTau = -Infinity;
+      const grid = [];
+
+      // Bereich um aktuellen q,f-Zustand
+      const qSpan = 0.8;
+      let qMin = Math.max(0.1, qCurr - qSpan / 2);
+      let qMax = qMin + qSpan;
+
+      const fSpan = 0.6;
+      let fMin = Math.max(0.0, fCurr - fSpan / 2);
+      let fMax = Math.min(0.8, fMin + fSpan);
+      if (fMax - fMin < 0.2) {
+        fMax = Math.min(0.8, fMin + 0.2);
+      }
+
+      // Gitter berechnen
+      for (let iy = 0; iy < ny; iy++) {
+        const fVal = fMin + (iy / (ny - 1)) * (fMax - fMin);
+        const row = [];
+        for (let ix = 0; ix < nx; ix++) {
+          const qVal = qMin + (ix / (nx - 1)) * (qMax - qMin);
+          const tauDec = (qVal * rhoLawDec * (1 - fVal)) / (1 + gammaDec * qVal);
+          const tauPct = tauDec * 100;
+          row.push(tauPct);
+          if (tauPct < minTau) minTau = tauPct;
+          if (tauPct > maxTau) maxTau = tauPct;
+        }
+        grid.push(row);
+      }
+
+      if (!isFinite(minTau) || !isFinite(maxTau) || maxTau <= minTau) {
+        minTau = 0;
+        maxTau = 30;
+      }
+
+      // Heatmap zeichnen
+      for (let iy = 0; iy < ny - 1; iy++) {
+        const fVal0 = fMin + (iy / (ny - 1)) * (fMax - fMin);
+        const fVal1 = fMin + ((iy + 1) / (ny - 1)) * (fMax - fMin);
+        const y0 = paddingTop + (1 - (fVal0 - fMin) / (fMax - fMin)) * plotH;
+        const y1 = paddingTop + (1 - (fVal1 - fMin) / (fMax - fMin)) * plotH;
+        const cellH = y1 - y0;
+
+        for (let ix = 0; ix < nx - 1; ix++) {
+          const qVal0 = qMin + (ix / (nx - 1)) * (qMax - qMin);
+          const qVal1 = qMin + ((ix + 1) / (nx - 1)) * (qMax - qMin);
+          const x0 = paddingLeft + ((qVal0 - qMin) / (qMax - qMin)) * plotW;
+          const x1 = paddingLeft + ((qVal1 - qMin) / (qMax - qMin)) * plotW;
+          const cellW = x1 - x0;
+
+          const tauCell = grid[iy][ix];
+          const norm = (tauCell - minTau) / (maxTau - minTau);
+          const h = (1 - norm) * 240;
+          ctx.fillStyle = `hsl(${h}, 80%, 50%)`;
+          ctx.fillRect(x0, y1, cellW, -cellH);
+        }
+      }
+
+      // Achsen
+      ctx.strokeStyle = "rgba(148,163,184,0.8)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft, paddingTop);
+      ctx.lineTo(paddingLeft, paddingTop + plotH);
+      ctx.lineTo(paddingLeft + plotW, paddingTop + plotH);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(148,163,184,0.9)";
+      ctx.font = "10px system-ui";
+
+      // x-Achse q-Ticks
+      const qTicks = 4;
+      for (let i = 0; i <= qTicks; i++) {
+        const t = i / qTicks;
+        const qVal = qMin + t * (qMax - qMin);
+        const x = paddingLeft + t * plotW;
+        const y = paddingTop + plotH;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + 4);
+        ctx.stroke();
+        ctx.fillText(qVal.toFixed(2), x - 10, y + 14);
+      }
+      ctx.fillText("q = N_R / N_C", paddingLeft + plotW / 2 - 25, paddingTop + plotH + 26);
+
+      // y-Achse f-Ticks
+      const fTicks = 4;
+      for (let i = 0; i <= fTicks; i++) {
+        const t = i / fTicks;
+        const fVal = fMin + t * (fMax - fMin);
+        const y = paddingTop + (1 - t) * plotH;
+        const x = paddingLeft;
+        ctx.beginPath();
+        ctx.moveTo(x - 4, y);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.fillText((fVal * 100).toFixed(0) + "%", x - 32, y + 3);
+      }
+      ctx.save();
+      ctx.translate(paddingLeft - 38, paddingTop + plotH / 2 + 15);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText("Steueranteil f", 0, 0);
+      ctx.restore();
+
+      // Farblegende
+      const legendX = paddingLeft + plotW + 8;
+      const legendY = paddingTop;
+      const legendH = plotH;
+      const legendW = 12;
+
+      for (let i = 0; i < legendH; i++) {
+        const t = i / (legendH - 1);
+        const tauVal = maxTau - t * (maxTau - minTau);
+        const norm = (tauVal - minTau) / (maxTau - minTau);
+        const h = (1 - norm) * 240;
+        ctx.fillStyle = `hsl(${h}, 80%, 50%)`;
+        ctx.fillRect(legendX, legendY + i, legendW, 1);
+      }
+      ctx.strokeStyle = "rgba(148,163,184,0.8)";
+      ctx.strokeRect(legendX, legendY, legendW, legendH);
+
+      ctx.fillStyle = "rgba(148,163,184,0.9)";
+      const tauTicks = 4;
+      for (let i = 0; i <= tauTicks; i++) {
+        const t = i / tauTicks;
+        const y = legendY + t * legendH;
+        const tauVal = maxTau - t * (maxTau - minTau);
+        ctx.beginPath();
+        ctx.moveTo(legendX + legendW, y);
+        ctx.lineTo(legendX + legendW + 3, y);
+        ctx.stroke();
+        ctx.fillText(tauVal.toFixed(1) + "%", legendX + legendW + 6, y + 3);
+      }
+      ctx.fillText("τ", legendX + legendW + 6, legendY - 10);
+
+      // Legende-Punkt
+      const legendPointY = legendY + legendH + 16;
+      const legendPointX = legendX;
+      ctx.beginPath();
+      ctx.arc(legendPointX + 6, legendPointY, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(0,0,0,0.8)";
+      ctx.stroke();
+      ctx.fillStyle = "rgba(148,163,184,0.9)";
+      ctx.fillText("(q, f)", legendPointX + 16, legendPointY + 3);
+
+      // Isolinien für τ
+      const tauLevels = [];
+      const nIso = 5;
+      for (let i = 1; i <= nIso; i++) {
+        const frac = i / (nIso + 1);
+        const val = minTau + frac * (maxTau - minTau);
+        tauLevels.push(val);
+      }
+
+      ctx.lineWidth = 1;
+      tauLevels.forEach((tauLevel, idx) => {
+        const tauDecLevel = tauLevel / 100;
+        ctx.beginPath();
+        let started = false;
+        const steps = 200;
+        const colorGray = 200 + idx * 10;
+        ctx.strokeStyle = `rgba(${colorGray},${colorGray},${colorGray},0.8)`;
+        for (let i = 0; i <= steps; i++) {
+          const qVal = qMin + (i / steps) * (qMax - qMin);
+          const denom = qVal * rhoLawDec;
+          if (denom <= 0) continue;
+          let fVal = 1 - (tauDecLevel * (1 + gammaDec * qVal)) / denom;
+          if (fVal < fMin || fVal > fMax) {
+            started = false;
+            continue;
+          }
+          const x = paddingLeft + ((qVal - qMin) / (qMax - qMin)) * plotW;
+          const y = paddingTop + (1 - (fVal - fMin) / (fMax - fMin)) * plotH;
+          if (!started) {
+            ctx.moveTo(x, y);
+            started = true;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.stroke();
+      });
+
+      // Iso-Linie für vorgegebenen τ
+      if (useTauOv && rhoLawDec > 0) {
+        const tauDecOv = tauOverrideVal / 100;
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        let started = false;
+        const steps = 300;
+        for (let i = 0; i <= steps; i++) {
+          const qVal = qMin + (i / steps) * (qMax - qMin);
+          const denom = qVal * rhoLawDec;
+          if (denom <= 0) continue;
+          let fVal = 1 - (tauDecOv * (1 + gammaDec * qVal)) / denom;
+          if (fVal < fMin || fVal > fMax) {
+            started = false;
+            continue;
+          }
+          const x = paddingLeft + ((qVal - qMin) / (qMax - qMin)) * plotW;
+          const y = paddingTop + (1 - (fVal - fMin) / (fMax - fMin)) * plotH;
+          if (!started) {
+            ctx.moveTo(x, y);
+            started = true;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.stroke();
+      }
+
+      // Punkt (aktueller Zustand) im q-f-Plot
+      if (qCurr >= qMin && qCurr <= qMax && fCurr >= fMin && fCurr <= fMax) {
+        const xP = paddingLeft + ((qCurr - qMin) / (qMax - qMin)) * plotW;
+        const yP = paddingTop + (1 - (fCurr - fMin) / (fMax - fMin)) * plotH;
+        ctx.beginPath();
+        ctx.arc(xP, yP, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(xP, yP, 4, 0, 2 * Math.PI);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(0,0,0,0.8)";
+        ctx.stroke();
+      }
+    }
+
+    function update() {
+      const NC = Number(nc.value);
+      const NR = Number(nr.value);
+      const Wk = Number(w.value);
+      const rhoPct = Number(rho.value);
+      const fPct   = Number(f.value);
+      const gammaPct = Number(gamma.value);
+
+      const W = Wk * 1000;
+      const q  = NR / NC;
+      const rhoDec = rhoPct / 100;
+      const fDec   = fPct / 100;
+      const gammaDec = gammaPct / 100;
+
+      // Private Vorsorge
+      const sDec = Number(sPriv.value) / 100;
+      const rDec = Number(rPriv.value) / 100;
+      const Tc = Number(TcPriv.value);
+      const Tr = Number(TrPriv.value);
+
+      let rhoPrivDec = 0;
+      let K = 0;
+      let Ppriv = 0;
+
+      if (sDec > 0 && Tc > 0 && Tr > 0) {
+        if (rDec > 0) {
+          const num = Math.pow(1 + rDec, Tc) - 1;
+          const den = 1 - Math.pow(1 + rDec, -Tr);
+          if (den > 0) {
+            const factor = num / den;
+            rhoPrivDec = sDec * factor;
+            // absolut in €:
+            K = sDec * W * ((Math.pow(1 + rDec, Tc) - 1) / rDec);
+            Ppriv = K * (rDec / (1 - Math.pow(1 + rDec, -Tr)));
+          }
+        } else {
+          // r = 0: einfache lineare Akkumulation und gleichmäßige Entnahme
+          K = sDec * W * Tc;
+          Ppriv = K / Tr;
+          rhoPrivDec = Ppriv / W;
+        }
+      }
+
+      const rhoPrivPct = rhoPrivDec * 100;
+      const rhoTotPct = (rhoDec + rhoPrivDec) * 100;
+
+      // Aktivrente: effektive Lohnsumme
+      const L = (NC + gammaDec * NR) * 1e6 * W;
+
+      const A = NR * 1e6 * rhoDec * W;
+      const tauDec_model = (q * rhoDec * (1 - fDec)) / (1 + gammaDec * q);
+      const tauPct_model = tauDec_model * 100;
+
+      const tauOverrideVal = tauOv.value === "" ? null : Number(tauOv.value);
+      const useTauOv = tauOverrideVal !== null && !Number.isNaN(tauOverrideVal);
+
+      let B_actual = tauDec_model * L;
+      let S_actual = A - B_actual;
+      let fImplPct = fPct;
+
+      if (useTauOv) {
+        const tauOvDec = tauOverrideVal / 100;
+        B_actual = tauOvDec * L;
+        S_actual = A - B_actual;
+        const fImpl = S_actual / A;
+        fImplPct = fImpl * 100;
+      }
+
+      const A_bn = A / 1e9;
+      const B_bn = B_actual / 1e9;
+      const S_bn = S_actual / 1e9;
+
+      // Labels
+      ncLabel.textContent  = NC + " Mio";
+      nrLabel.textContent  = NR + " Mio";
+      wLabel.textContent   = Wk.toFixed(0) + " k€";
+      rhoLabel.textContent = rhoPct.toFixed(0) + " %";
+      fLabel.textContent   = fPct.toFixed(0) + " %";
+      gammaLabel.textContent = gammaPct.toFixed(0) + " %";
+      tauOvLbl.textContent = useTauOv ? tauOverrideVal.toFixed(1) + " %" : "auto";
+
+      sPrivLabel.textContent  = (sDec * 100).toFixed(0) + " %";
+      rPrivLabel.textContent  = (rDec * 100).toFixed(2) + " %";
+      TcPrivLabel.textContent = Tc.toFixed(0) + " a";
+      TrPrivLabel.textContent = Tr.toFixed(0) + " a";
+
+      // Outputs
+      tauOut.textContent = fmtPct(tauPct_model);
+      fOut.textContent   = useTauOv ? fmtPct(fImplPct) : fmtPct(fPct);
+      AOut.textContent   = fmtBn(A_bn);
+      BOut.textContent   = fmtBn(B_bn);
+      SOut.textContent   = fmtBn(S_bn);
+      qOut.textContent   = fmtRat(q);
+
+      rhoGesOut.textContent  = fmtPct(rhoPct);
+      rhoPrivOut.textContent = fmtPct(rhoPrivPct);
+      rhoTotOut.textContent  = fmtPct(rhoTotPct);
+
+      PprivOut.textContent   = fmtK(Ppriv / 1000); // k€
+      KprivOut.textContent   = fmtK(K / 1000);     // k€
+
+      drawContour();
+    }
+
+    [nc, nr, w, rho, f, gamma, tauOv, sPriv, rPriv, TcPriv, TrPriv].forEach(el => {
+      el.addEventListener("input", update);
+      el.addEventListener("change", update);
+    });
+
+    document.querySelectorAll(".scenario-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const scenario = e.target.getAttribute("data-scenario");
+        document.querySelectorAll(".scenario-btn").forEach(b => b.classList.remove("primary"));
+        e.target.classList.add("primary");
+        applyScenario(scenario);
+      });
+    });
+
+    exportChartBtn.addEventListener("click", () => {
+      const url = contourCanvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "rentenmodell_contour.png";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+
+    // Start mit Status-quo-Szenario
+    applyScenario("statusQuoDE");
+  </script>
+</body>
+</html>
