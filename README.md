@@ -1,7 +1,7 @@
 # Rentensystem-Simulator
 
 Interaktiver, didaktischer Browser-Simulator für ein vereinfachtes Umlageverfahren mit
-Aktivrente \(\gamma\) und privater Vorsorge.
+Aktivrente ($\gamma$) und privater Vorsorge.
 
 - Datei: **`rente.html`**
 - Läuft komplett clientseitig (nur HTML, CSS, JavaScript, MathJax).
