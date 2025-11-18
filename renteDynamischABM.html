@@ -1441,13 +1441,15 @@
           <div class="party-pref">\\(\\rho^*: ${party.preferences.rho}\\%\\)</div>
           <div class="party-pref">\\(f^*: ${party.preferences.f}\\%\\)</div>
           <div class="party-pref">\\(M^*_{\\text{mig}}: ${party.preferences.mmig} \\text{ Mio/a}\\)</div>
-          <div class="party-pref">
-          \\[
-            \begin{align}
-            (w_\tau,\; w_\rho,\; w_f,\; w_M) &= ({party.weights.tau},\; {party.weights.rho},\; {party.weights.f},\; {party.weights.mmig})
-            \end{align}
-            \\]
-          </div>
+        <div class="party-pref">
+        \\\\[
+        \\begin{aligned}
+        (w_{\\tau},\\; w_{\\rho},\\; w_{f},\\; w_{M})
+        &\\;=\\;
+        \\bigl( {party.weights.tau},\\; {party.weights.rho},\\; {party.weights.f},\\; {party.weights.mmig} \\bigr)
+        \\end{aligned}
+        \\\\]
+        </div>
         `;
 
         partyGrid.appendChild(card);
