@@ -565,6 +565,11 @@
           <button type="button" class="pill-btn" data-party="AfD">AfD</button>
           <button type="button" class="pill-btn" data-party="Linke">Linke</button>
         </div>
+        <div class="subtitle" style="margin-top:4px;">
+          Hinweis: Die Auswahl einer Partei setzt \(\tau_{\max}, \rho_{\min}, M_{\text{mig}}\) und den Steueranteil
+          \(f\) auf die jeweiligen Idealwerte \((\tau^*, \rho^*, f^*, M^*_{\text{mig}})\) der Partei.
+          Für diese Partei gilt dann \(U = 0\) (maximale Zufriedenheit).
+        </div>
       </div>
 
       <div class="info-box">
@@ -602,7 +607,7 @@
         \(U(\tau,\rho,f,M_{\text{mig}})\) pro Partei berechnet.
         Als „aktuelle Policy“ gilt hier:
         \(\tau = \tau_{\max}\), \(\rho = \rho_{\min}\),
-        \(f = 30\%\) (fester Steueranteil),
+        \(f = f_{\text{aktuell}}\) (Steueranteil; bei Parteipreselektion auf Idealwert der gewählten Partei gesetzt),
         \(M_{\text{mig}}\) wie im Slider oben.
         Die Zufriedenheitsskala ist relativ zur unzufriedensten Partei (0&nbsp;%)
         bis zu optimaler Anpassung (100&nbsp;%).
@@ -827,6 +832,9 @@
     const TOTAL_SEATS = 630;
     const MAJORITY = 316;
 
+    // Globaler Steueranteil f (%) für die aktuelle Policy
+    let currentF = 30; // wird durch Parteipreselektion angepasst
+
     // DOM Elements
     const startYearInput = document.getElementById("startYear");
     const nc0Input = document.getElementById("nc0");
@@ -842,7 +850,7 @@
 
     const startYearLabel = document.getElementById("startYearLabel");
     const nc0Label = document.getElementById("nc0Label");
-    const nr0Label = document.getElementElementById?.("nr0Label") || document.getElementById("nr0Label");
+    const nr0Label = document.getElementById("nr0Label");
     const gcLabel = document.getElementById("gcLabel");
     const grLabel = document.getElementById("grLabel");
     const wLabel = document.getElementById("wLabel");
@@ -989,7 +997,7 @@
       const policy = {
         tau: Number(tauMaxInput.value),
         rho: Number(rhoMinInput.value),
-        f: 30, // fixer Steueranteil für das Utility-Panel
+        f: currentF, // aktueller Steueranteil (wird von Parteipills gesetzt)
         mmig: Number(mmigInput.value)
       };
 
@@ -1176,10 +1184,10 @@
       const trajNoMig = projectDemography(nc0, nr0, gc / 100, gr / 100, 0, T);
 
       const tauWithMig = trajWithMig.map(p =>
-        calculateTauErf(p.q, rhoMin / 100, 0.3, gamma / 100) * 100
+        calculateTauErf(p.q, rhoMin / 100, currentF / 100, gamma / 100) * 100
       );
       const tauNoMig = trajNoMig.map(p =>
-        calculateTauErf(p.q, rhoMin / 100, 0.3, gamma / 100) * 100
+        calculateTauErf(p.q, rhoMin / 100, currentF / 100, gamma / 100) * 100
       );
 
       const allTau = [...tauWithMig, ...tauNoMig];
@@ -1405,7 +1413,9 @@
       const tauMax = Number(tauMaxInput.value);
       const gamma = Number(gammaInput.value);
 
-      const requiredMmig = calculateRequiredMmig(nc0, nr0, gc, gr, T, rhoMin, 30, gamma, tauMax);
+      const requiredMmig = calculateRequiredMmig(
+        nc0, nr0, gc, gr, T, rhoMin, currentF, gamma, tauMax
+      );
       requiredMigOut.textContent = fmt(requiredMmig, 2) + " Mio/a";
 
       if (requiredMmig > 0.8) {
@@ -1430,7 +1440,7 @@
           <div class="party-pref">\\(\\tau^*\\): ${party.preferences.tau}\\%</div>
           <div class="party-pref">\\(\\rho^*\\): ${party.preferences.rho}\\%</div>
           <div class="party-pref">\\(f^*\\): ${party.preferences.f}\\%</div>
-          <div class="party-pref">\\(M^*_{\\text{mig}}\\): ${party.preferences.mmig} Mio/a</div>
+          <div class="party-pref">\\(M^*_{\\text{mig}}\\): ${party.preferences.mmig} \\text{ Mio/a}\\)</div>
           <div class="party-pref">
             \\((w_\\tau, w_\\rho, w_f, w_M) = (${party.weights.tau}, ${party.weights.rho}, ${party.weights.f}, ${party.weights.mmig})\\)
           </div>
@@ -1445,7 +1455,7 @@
       }
     }
 
-    // Apply party preset to tau_max, rho_min, M_mig
+    // Apply party preset to tau_max, rho_min, M_mig und currentF
     function applyPartyPreset(partyName) {
       const party = PARTIES.find(p => p.name === partyName);
       if (!party) return;
@@ -1453,6 +1463,7 @@
       tauMaxInput.value = party.preferences.tau;
       rhoMinInput.value = party.preferences.rho;
       mmigInput.value = party.preferences.mmig;
+      currentF = party.preferences.f; // Steueranteil auf Idealwert der Partei setzen
 
       pillButtons.forEach(btn => {
         if (btn.dataset.party === partyName) {
@@ -1473,7 +1484,6 @@
       const rhoMin = Number(rhoMinInput.value);
       const gamma = Number(gammaInput.value);
 
-      // Jetzt alle Parteien inkl. AfD
       const coalitions = [];
 
       // Zweier-Koalitionen
@@ -1591,7 +1601,6 @@
           const year = startYear + idx;
           const q = point.q;
 
-          // alle Parteien inkl. AfD
           const viableParties = PARTIES;
           let viableCount = 0;
 
