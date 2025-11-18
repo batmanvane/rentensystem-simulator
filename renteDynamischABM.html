@@ -1369,26 +1369,31 @@
     }
 
     function updatePartyDisplay() {
-      partyGrid.innerHTML = "";
+  partyGrid.innerHTML = "";
 
-      PARTIES.forEach(party => {
-        const card = document.createElement("div");
-        card.className = `party-card ${party.name.toLowerCase().replace(/\//g, '')}`;
+  PARTIES.forEach(party => {
+    const card = document.createElement("div");
+    card.className = `party-card ${party.name.toLowerCase().replace(/\//g, '')}`;
 
-        const seatPct = ((party.seats / TOTAL_SEATS) * 100).toFixed(1);
+    const seatPct = ((party.seats / TOTAL_SEATS) * 100).toFixed(1);
 
-        card.innerHTML = `
-          <div class="party-name" style="color: ${party.color}">${party.name}</div>
-          <div class="party-seats">${party.seats} Sitze (${seatPct}%)</div>
-          <div class="party-pref">tau: ${party.preferences.tau}%</div>
-          <div class="party-pref">rho: ${party.preferences.rho}%</div>
-          <div class="party-pref">f: ${party.preferences.f}%</div>
-          <div class="party-pref">M: ${party.preferences.mmig} Mio/a</div>
-        `;
+    card.innerHTML = `
+      <div class="party-name" style="color: ${party.color}">${party.name}</div>
+      <div class="party-seats">${party.seats} Sitze (${seatPct}%)</div>
+      <div class="party-pref">tau* (Ideal): ${party.preferences.tau}%</div>
+      <div class="party-pref">rho* (Ideal): ${party.preferences.rho}%</div>
+      <div class="party-pref">f* (Ideal): ${party.preferences.f}%</div>
+      <div class="party-pref">M* (Ideal): ${party.preferences.mmig} Mio/a</div>
+      <div class="party-pref">
+        Gewichte (w_tau, w_rho, w_f, w_M):<br/>
+        ${party.weights.tau} / ${party.weights.rho} / ${party.weights.f} / ${party.weights.mmig}
+      </div>
+    `;
 
-        partyGrid.appendChild(card);
-      });
-    }
+    partyGrid.appendChild(card);
+  });
+}
+
 
     function analyzeCoalitions() {
       const nc0 = Number(nc0Input.value);
