@@ -224,7 +224,7 @@
       background: #020617;
       display: block;
     }
-    /* Neues Dynamik-Canvas */
+    /* Dynamik-Canvas */
     #qDynamics {
       width: 100%;
       height: 260px;
@@ -234,6 +234,32 @@
       display: block;
       margin-top: 8px;
     }
+    .dyn-legend {
+      margin-top: 4px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .dyn-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .dyn-legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+    }
+    .dyn-legend-swatch.q {
+      background: rgba(56, 189, 248, 0.9);
+    }
+    .dyn-legend-swatch.tau {
+      background: rgba(250, 204, 21, 0.9);
+    }
+
     .export-bar {
       display: flex;
       justify-content: flex-end;
@@ -302,6 +328,7 @@
       color: var(--muted);
       line-height: 1.35;
     }
+
     @media (max-width: 880px) {
       .app {
         grid-template-columns: minmax(0, 1fr);
@@ -332,6 +359,9 @@
       #tauContour {
         height: 240px;
       }
+      #qDynamics {
+        height: 220px;
+      }
     }
     @media (max-width: 500px) {
       header {
@@ -339,6 +369,9 @@
       }
       h1 {
         font-size: 1.25rem;
+      }
+      #qDynamics {
+        height: 200px;
       }
     }
   </style>
@@ -349,7 +382,7 @@
       <h1>Rentensystem-Simulator</h1>
       <div class="subtitle">
         <strong>Einfaches Umlage-Modell</strong> mit Erweiterung um Aktivrente \(\gamma\), private Vorsorge
-        und ein gekoppeltes Demografie-Modell mit Erwerbsmigration.
+        und ein dynamisches Demografie-Modell mit Erwerbsmigration.
       </div>
       <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
         \[
@@ -367,7 +400,7 @@
         Rente in&nbsp;% des Lohns), \(f\) der Anteil der Rentenausgaben, der
         aus Steuern finanziert wird, und \(\gamma\) misst die beitragspflichtige Erwerbsintensität
         der Rentner (Aktivrente). Eine zusätzliche private Rente wird über \(\rho_{\text{privat}}\) modelliert.
-        Das neue Demografie-Modul koppelt ein einfaches Zeitmodell für \(N_C(t)\), \(N_R(t)\) mit einem
+        Das dynamische Demografie-Modell koppelt \(N_C(t)\), \(N_R(t)\) mit einem
         Quellterm für Erwerbsmigration \(M_{\text{mig}}\).
       </div>
     </header>
@@ -590,9 +623,9 @@
       </div>
     </section>
 
-    <!-- NEU: DYNAMISCHES MODELL -->
+    <!-- DYNAMISCHES MODELL -->
     <section class="card full-width" id="dynamics">
-      <h2>Dynamik: Demografie, Umlage & Erwerbsmigration</h2>
+      <h2>Dynamisches Demografie-Modell: Umlage & Erwerbsmigration</h2>
 
       <h3>Dynamik-Parameter (vereinfachtes Jahresmodell)</h3>
       <div class="grid-2">
@@ -650,9 +683,19 @@
       </div>
 
       <canvas id="qDynamics"></canvas>
+      <div class="dyn-legend">
+        <div class="dyn-legend-item">
+          <span class="dyn-legend-swatch q"></span> q(t) = N<span style="font-size:0.75em;">R</span>/N<span style="font-size:0.75em;">C</span> (linke Achse)
+        </div>
+        <div class="dyn-legend-item">
+          <span class="dyn-legend-swatch tau"></span> τ(t) (rechte Achse, in %)
+        </div>
+      </div>
       <div class="contour-caption" id="dynCaption">
-        Zeitentwicklung von \(q(t) = N_R(t)/N_C(t)\) über den Horizont \(T\). Ausgangspunkt sind die
-        oben gewählten Werte für \(N_C\) und \(N_R\).<br/>
+        Zeitentwicklung von \(q(t) = N_R(t)/N_C(t)\) und dem dazugehörigen Beitragssatz \(\tau(t)\).
+        Ausgangspunkt sind die oben gewählten Werte für \(N_C\) und \(N_R\). Das letzte Jahr \(T\) wird
+        als Punkt hervorgehoben; die Kennzahlen \(q(T)\), \(\tau(T)\), \(A(T)\) und \(S(T)\) stehen oben
+        als Zahlen.<br/>
         Die Dynamik folgt einem einfachen Jahresmodell mit Wachstumsraten \(g_C, g_R\) und einem
         Quellterm für Erwerbsmigration \(M_{\text{mig}}\), der jährlich zur Gruppe der
         Beitragszahler hinzukommt (\(N_C\) in Mio.). Bei gegebenem politischen Setting
@@ -700,7 +743,7 @@
           <tr><td>\(T_R\)</td><td>Dauer der Rentenphase (Rentenjahre)</td></tr>
           <tr><td>\(K\)</td><td>Privates Kapital bei Renteneintritt</td></tr>
           <tr><td>\(P_{\text{privat}}\)</td><td>Jährliche private Rente (Annuität aus \(K\))</td></tr>
-          <tr><td>\(g_C\)</td><td>Netto-Wachstumsrate der Beitragszahler (in % p.a., z.&nbsp;B. demografische Entwicklung, Erwerbsbeteiligung)</td></tr>
+          <tr><td>\(g_C\)</td><td>Netto-Wachstumsrate der Beitragszahler (in % p.a.)</td></tr>
           <tr><td>\(g_R\)</td><td>Netto-Wachstumsrate der Rentner (in % p.a.)</td></tr>
           <tr><td>\(M_{\text{mig}}\)</td><td>Quellterm „Erwerbsmigration“ (Zugang in den Arbeitsmarkt in Mio. Personen pro Jahr)</td></tr>
           <tr><td>\(T\)</td><td>Simulationshorizont des Dynamikmodells (Jahre)</td></tr>
@@ -726,7 +769,7 @@
         Es gilt:
         <span class="math-inline">\(E_{\text{Beitrag}} + E_{\text{Steuer}} = A\)</span>.
       </p>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Einsetzen und Umformen ergibt:
       </p>
       <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
@@ -738,7 +781,7 @@
         \tau = \frac{N_R}{N_C} \cdot \frac{\bar p}{\bar w} \cdot (1 - f)
         \]
       </div>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Definiert man das gesetzliche Rentenniveau
         \(\rho_{\text{gesetz}} = \bar p / \bar w\) und den Abhängigkeitsquotienten
         \(q = N_R / N_C\), erhält man das einfache Umlage-Modell:
@@ -748,20 +791,20 @@
         \tau = q \cdot \rho_{\text{gesetz}} \cdot (1 - f)
         \]
       </div>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Dieses Modell nimmt implizit an, dass Rentner keine Beiträge zahlen und alle Beitragszahler
         nicht im Rentenbezug sind. Steigt \(q\) (mehr Rentner pro Beitragszahler), bleibt
         \(\rho_{\text{gesetz}}\) hoch und \(f\) niedrig, muss \(\tau\) steigen.
       </p>
 
       <h3>Erweiterung: Aktivrente \(\gamma\)</h3>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Mit Aktivrente wird angenommen, dass ein Teil der Rentner weiter arbeitet und Beiträge zahlt.
         Sei \(\gamma\) die beitragspflichtige Erwerbsintensität der Rentner, gemessen in Einheiten von
         Vollzeitbeschäftigung: \(\gamma N_R\) verhält sich also so, als gäbe es so viele zusätzliche
         „virtuelle“ Vollzeit-Beitragszahler.
       </p>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Dann ist die beitragspflichtige Lohnsumme
         <span class="math-inline">\(L = \bar w \,(N_C + \gamma N_R)\)</span> und die Beitragseinnahmen sind
         <span class="math-inline">\(E_{\text{Beitrag}} = \tau \, L = \tau \,\bar w\,(N_C + \gamma N_R)\)</span>.
@@ -781,21 +824,21 @@
         = \frac{q \cdot \rho_{\text{gesetz}} \cdot (1-f)}{1 + \gamma q}
         \]
       </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Für \(\gamma = 0\) erhält man wieder das einfache Umlage-Modell (Annahme: Rentner zahlen keine Beiträge).
+      <p class="sources-list" style="line-height:1.45%;">
+        Für \(\gamma = 0\) erhält man wieder das einfache Umlage-Modell.
         Je größer \(\gamma\), desto stärker verschiebt die Aktivrente die demografische Last, weil ein Teil der
         Rentner wieder zur Beitragsbasis gehört.
       </p>
 
       <h3>Modellansatz Eigenvorsorge: private Ersatzrate \(\rho_{\text{privat}}\)</h3>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Zusätzlich wird eine private Vorsorgesäule modelliert: Individuen sparen jedes Jahr einen Anteil
         \(s\) ihres Lohns, erzielen eine reale Rendite \(r\) und beziehen später aus dem angesparten Kapital
         eine private Rente. Dieses Vorsorgemodell wirkt auf einer <strong>anderen Ebene</strong>:
         Die Umlageformel bestimmt die Finanzierungslogik der gesetzlichen Säule, während die private Säule
         das Gesamtalterseinkommen ergänzt.
       </p>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Annahmen:
       </p>
       <ul class="sources-list">
@@ -803,7 +846,7 @@
         <li>Sparphase über \(T_C\) Jahre mit realer Rendite \(r\).</li>
         <li>Rentenphase über \(T_R\) Jahre; das angesparte Kapital wird als Annuität verrentet.</li>
       </ul>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Kapital bei Renteneintritt:
         <span class="math-inline">
           \(K = s \,\bar w \,\dfrac{(1+r)^{T_C} - 1}{r}\)
@@ -814,7 +857,7 @@
           \(P_{\text{privat}} = K \cdot \dfrac{r}{1 - (1+r)^{-T_R}}\)
         </span>.
       </p>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Die private Ersatzrate ist dann
       </p>
       <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
@@ -823,18 +866,13 @@
         = s \cdot \frac{[(1+r)^{T_C} - 1]/r}{1 - (1+r)^{-T_R}}.
         \]
       </div>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Die Gesamt-Ersatzrate im Alter ergibt sich aus gesetzlicher und privater Säule:
         <span class="math-inline">\(\rho_{\text{gesamt}} = \rho_{\text{gesetz}} + \rho_{\text{privat}}\)</span>.
-        Im Tool wird \(\rho_{\text{gesetz}}\) in der Umlageformel genutzt, \(\rho_{\text{privat}}\) dient zur
-        Beurteilung des gesamten Alterseinkommens. Ein wichtiger didaktischer Punkt ist, dass
-        private Vorsorge zwar das individuelle Alterseinkommen erhöhen und politische Spielräume
-        bei \(\rho_{\text{gesetz}}\) eröffnen kann, aber <strong>die Umlagemechanik selbst</strong> (insbesondere die
-        demografische Relation \(q\)) dadurch nicht verschwindet.
       </p>
 
-      <h3>Neues dynamisches Demografie-Modell mit Erwerbsmigration</h3>
-      <p class="sources-list" style="line-height:1.45;">
+      <h3>Dynamisches Demografie-Modell mit Erwerbsmigration</h3>
+      <p class="sources-list" style="line-height:1.45%;">
         Um nicht nur statische Zustände, sondern die Entwicklung des Systems zu untersuchen, wird das
         Umlage-Modell mit einem einfachen <strong>dynamischen Demografie-Modell</strong> gekoppelt.
         Ausgangspunkt sind die aktuellen Werte \(N_C(0)\), \(N_R(0)\) aus den Slidern. Für jedes Jahr
@@ -851,28 +889,17 @@
           q(t) = \frac{N_R(t)}{N_C(t)}.
         \]
       </div>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Die Parameter bedeuten:
       </p>
       <ul class="sources-list">
-        <li>\(g_C\): Netto-Wachstumsrate der Beitragszahler (in % p.a.), z.&nbsp;B. aus Demografie,
-            Erwerbsbeteiligung, Bildungs- und Arbeitsmarktpolitik.</li>
-        <li>\(g_R\): Netto-Wachstumsrate der Rentner (in % p.a.), getrieben durch Altersstruktur und Lebenserwartung.</li>
-        <li>\(M_{\text{mig}}\): jährlicher <strong>Quellterm für Erwerbsmigration</strong>, gemessen in Mio. Personen pro Jahr,
+        <li>\(g_C\): Netto-Wachstumsrate der Beitragszahler (in % p.a.).</li>
+        <li>\(g_R\): Netto-Wachstumsrate der Rentner (in % p.a.).</li>
+        <li>\(M_{\text{mig}}\): jährlicher <strong>Quellterm für Erwerbsmigration</strong> (Mio. Personen pro Jahr),
             die in den beitragspflichtigen Arbeitsmarkt eintreten.</li>
       </ul>
-      <p class="sources-list" style="line-height:1.45;">
-        Mathematisch entspricht \(M_{\text{mig}}\) einem additiven Quellterm in der Differenzengleichung
-        für die Beitragszahler. In kontinuierlicher Notation wäre dies z.&nbsp;B.
-      </p>
-      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:450px;">
-        \[
-          \frac{dN_C}{dt} = g_C N_C + M_{\text{mig}}, \qquad
-          \frac{dN_R}{dt} = g_R N_R.
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Für jedes Jahr \(t\) wird dann aus \(q(t)\) mit den gewählten politischen Parametern
+      <p class="sources-list" style="line-height:1.45%;">
+        Für jedes Jahr \(t\) wird aus \(q(t)\) mit den gewählten politischen Parametern
         \(\rho_{\text{gesetz}}, f, \gamma\) eine Folge von Beitragssätzen \(\tau(t)\),
         Rentenausgaben \(A(t)\) und Steuerzuschüssen \(S(t)\) berechnet:
       </p>
@@ -885,61 +912,31 @@
           S(t) = A(t) - \tau(t)\,\bar w\,(N_C(t) + \gamma N_R(t)).
         \]
       </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Damit lassen sich mehrere strategische Fragen qualitativ untersuchen:
-      </p>
-      <ul class="sources-list">
-        <li>Wie stark verschlechtert sich \(q(t)\) bei ungünstiger Demografie (\(g_R &gt; g_C\)) ohne Migration?</li>
-        <li>Wie groß ist der entstehende Steuerzuschuss \(S(t)\) bei einem politisch fixierten Beitragssatz?</li>
-        <li>Wie verändert ein positiver Quellterm \(M_{\text{mig}}\) (mehr Erwerbsmigration) die Pfade von
-            \(q(t)\), \(\tau(t)\), \(A(t)\) und \(S(t)\)?</li>
-        <li>In welchem Umfang könnte Investition in „aktive“ Migrations- und Arbeitsmarktpolitik (höheres
-            \(M_{\text{mig}}\), höheres \(g_C\)) perspektivisch die Notwendigkeit hoher Steuerzuschüsse verringern?</li>
-      </ul>
-      <p class="sources-list" style="line-height:1.45;">
-        Die Umsetzung im Tool erfolgt mittels einer einfachen jährlichen Vorwärtsiteration (explizites Euler-Verfahren).
-        Am Ende des Horizonts \(T\) werden \(q(T)\), \(\tau(T)\), \(A(T)\) und \(S(T)\) als Kennzahlen ausgegeben,
-        während der Verlauf von \(q(t)\) im Zeitdiagramm visualisiert wird.
+      <p class="sources-list" style="line-height:1.45%;">
+        Im Tool werden die Pfade \(q(t)\) und \(\tau(t)\) in einem gemeinsamen Diagramm geplottet
+        (linke bzw. rechte y-Achse). Für das letzte Jahr \(T\) werden \(q(T)\), \(\tau(T)\),
+        \(A(T)\) und \(S(T)\) zusätzlich als Kennzahlen ausgeben.
       </p>
 
       <h3>Konturdiagramm \(\tau(q,f)\)</h3>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Das Konturdiagramm zeigt den Beitragssatz \(\tau\) in Abhängigkeit vom Abhängigkeitsquotienten
         \(q = N_R/N_C\) (x-Achse) und dem Steueranteil \(f\) (y-Achse) für das aktuell gewählte gesetzliche
-        Rentenniveau \(\rho_{\text{gesetz}}\) und die Aktivrente \(\gamma\). Iso-Linien verbinden Zustände
-        mit ähnlichem \(\tau\). Der weiße Punkt markiert die aktuelle Wahl von \(q\) und \(f\).
-      </p>
-      <p class="sources-list" style="line-height:1.45%;">
-        Die private Vorsorge-Ebene (\(\rho_{\text{privat}}, \rho_{\text{gesamt}}\)) wird separat berechnet
-        und in den Kennzahlen ausgegeben; sie beeinflusst das Konturdiagramm nicht direkt, da dieses die
-        reine Umlagefinanzierung visualisiert.
+        Rentenniveau \(\rho_{\text{gesetz}}\) und die Aktivrente \(\gamma\).
       </p>
 
       <h3>Datengrundlagen der voreingestellten Szenarien</h3>
       <p class="sources-list">
-        Die voreingestellten Werte sind gerundete, didaktisch vereinfachte
-        Größen (z.&nbsp;B. 40&nbsp;Mio. Beitragszahler, 21&nbsp;Mio. Rentner,
-        Rentenniveau 48&nbsp;%, Steueranteil 30&nbsp;%, moderate Aktivrente und Sparquoten).
-        Sie orientieren sich u.&nbsp;a. an:
+        Die voreingestellten Werte sind gerundete, didaktisch vereinfachte Größen
+        und dienen der Illustration.
       </p>
       <div class="sources-list">
         <ul>
           <li><a href="https://jahresbericht.deutsche-rentenversicherung.de/" target="_blank" rel="noopener">Deutsche Rentenversicherung – Jahresbericht</a></li>
-          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Statistikpublikationen/statistikpublikationen_node.html" target="_blank" rel="noopener">Deutsche Rentenversicherung – „Rentenversicherung in Zahlen“</a></li>
-          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Berichte/versichertenbericht_node.html" target="_blank" rel="noopener">Versichertenbericht der Deutschen Rentenversicherung</a></li>
-          <li><a href="https://www.destatis.de/DE/Themen/Querschnitt/Demografischer-Wandel/_inhalt.html" target="_blank" rel="noopener">Statistisches Bundesamt (Destatis) – Demografischer Wandel</a></li>
-          <li><a href="https://www.bmas.de/DE/Soziales/Rente-und-Altersvorsorge/rentenversicherungsbericht-art.html" target="_blank" rel="noopener">BMAS – Rentenversicherungsbericht / Alterssicherungsbericht</a></li>
-          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Berichte/rentenatlas_node.html" target="_blank" rel="noopener">Rentenatlas der Deutschen Rentenversicherung</a></li>
+          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Statistikpublikationen/statistikpublikationen_node.html" target="_blank" rel="noopener">„Rentenversicherung in Zahlen“</a></li>
+          <li><a href="https://www.destatis.de/DE/Themen/Querschnitt/Demografischer-Wandel/_inhalt.html" target="_blank" rel="noopener">Destatis – Demografischer Wandel</a></li>
         </ul>
       </div>
-      <p class="sources-list" style="margin-top:6px;">
-        Hinweis: Die im Tool verwendeten Werte sind bewusst gerundet und abstrahiert,
-        um die Modellmechanik, die zwei Ertragssäulen (Umlage vs. Eigenvorsorge) und nun auch die
-        gekoppelten Demografieeffekte (Wachstumsraten, Erwerbsmigration) zu verdeutlichen.
-        Für belastbare politische Analysen sollten die Originalberichte im Detail ausgewertet und
-        ggf. komplexere Modelle (mit Kohorten, Erwerbsbiografien, verschiedenen Rentenarten etc.)
-        eingesetzt werden.
-      </p>
       <p class="sources-list" style="margin-top:6px;">
         Last update: 2025-11-18 · Author: Robert Flassig · MIT License · Created with AI-assisted coding
       </p>
@@ -996,9 +993,6 @@
     const contourCanvas = document.getElementById("tauContour");
     const exportChartBtn = document.getElementById("exportChartBtn");
 
-    const contourCaption = document.getElementById("contourCaption");
-
-    // Dynamik-Elemente
     const Tdyn     = document.getElementById("Tdyn");
     const gCSlider = document.getElementById("gC");
     const gRSlider = document.getElementById("gR");
@@ -1020,42 +1014,42 @@
       statusQuoDE: {
         title: "Status quo (2024)",
         year: "2024",
-        desc: "Heutige Größenordnung: ca. 40 Mio. Beitragszahler gegenüber 21 Mio. Rentnern, durchschnittlicher Jahreslohn 50 k€, gesetzliches Rentenniveau 48 %, Steueranteil 30 %, kaum Aktivrente (γ ≈ 2 %) und moderate private Vorsorge (Sparquote 5 %). Das Modell zeigt, wie hoch der Beitragssatz τ bei dieser Ausgangslage liegt und welchen Beitrag die private Säule leisten könnte."
+        desc: "Heutige Größenordnung: ca. 40 Mio. Beitragszahler, 21 Mio. Rentner, Durchschnittslohn 50 k€, gesetzliches Rentenniveau 48 %, Steueranteil 30 %, geringe Aktivrente und moderate private Vorsorge."
       },
       rentenpaket: {
         title: "Rentenpaket: Haltelinie 48 % (bis 2031)",
         year: "2031",
-        desc: "Rentenpaket mit Haltelinie bei 48 %: etwas ungünstigeres Verhältnis von Beitragszahlern zu Rentnern und ein höherer Steueranteil (35 %). Aktivrente und private Vorsorge sind leicht erhöht. Das gesetzliche Rentenniveau wird politisch stabil gehalten, was höhere Beiträge oder mehr Steuern erfordert – die private Säule entlastet das Gesamteinkommen im Alter, aber ändert die Umlagelogik nur indirekt."
+        desc: "Haltelinie beim Rentenniveau, höherer Steueranteil und leicht veränderte Demografie."
       },
       demography2035: {
         title: "Demografie 2035 ohne Reform",
         year: "2035",
-        desc: "Demografie 2035 ohne zusätzliche Reformen: Verhältnis etwa 2 Beitragszahler auf 1 Rentner. Gesetzliches Rentenniveau und Steueranteil bleiben gleich, Aktivrente und private Vorsorge ändern sich kaum. Das erhöht den erforderlichen Beitragssatz τ deutlich – hier wird der demografische Druck bei unveränderten Leistungszusagen sichtbar."
+        desc: "Ungünstigere Altersstruktur, kaum zusätzliche Aktivrente oder Migration."
       },
       laterRetirement: {
         title: "Reform: späterer Rentenbeginn / Aktivrente",
         year: "ca. 2035+",
-        desc: "Reformszenario: späterer Rentenbeginn, höhere Erwerbsbeteiligung Älterer (höheres γ) und etwas stärkere private Vorsorge. Mehr Beitragszahler und ein relevanter Anteil aktiv arbeitender Rentner verbessern q und die effektive Beitragsbasis. Das entlastet den Beitragssatz τ, obwohl das gesetzliche Rentenniveau gehalten wird."
+        desc: "Mehr Erwerbsbeteiligung Älterer und etwas höhere Erwerbsmigration."
       },
       boomerSoli: {
         title: "„Boomer-Soli“: höherer Steueranteil",
         year: "2030er",
-        desc: "„Boomer-Soli“: der Steueranteil f steigt deutlich (z. B. 40 %), während das gesetzliche Rentenniveau bei 48 % bleibt und der Beitragssatz politisch bei etwa 18 % gedeckelt wird. Aktivrente und private Vorsorge sind moderat. Das Modell zeigt, wie groß der Steuerzuschuss S aus dem Bundeshaushalt dann sein müsste und wie private Vorsorge die Gesamt-Ersatzrate ergänzt."
+        desc: "Starker Steuerzuschuss, Beitragssatz politisch gedeckelt."
       },
       lowBenefit: {
         title: "Rentenmix: niedriges gesetzliches Niveau + hohe private Vorsorge",
         year: "theoretisch",
-        desc: "Rentenmix-Szenario: das gesetzliche Rentenniveau wird auf 35 % abgesenkt, dafür steigt die private Sparquote deutlich (z. B. 10 %) bei moderater Rendite. Das System wird zum Teil über eine Reduktion der gesetzlichen Leistungen stabilisiert – Beitragssatz und Steuerzuschuss sinken, während ein größerer Teil des Alterseinkommens über private Vorsorge kommt."
+        desc: "Stärkere Verlagerung auf private Säule, geringeres gesetzliches Niveau."
       },
       noTaxes: {
         title: "Radikal: keine Steuerfinanzierung f = 0",
         year: "theoretisch",
-        desc: "Radikal: keine Steuerfinanzierung (f = 0). Alle Renten werden vollständig aus Beiträgen finanziert. Aktivrente und private Vorsorge sind moderat. Das Modell zeigt, wie hoch der Beitragssatz τ steigen müsste, wenn der Bundeszuschuss entfällt – und macht sichtbar, dass höhere private Vorsorge zwar das Alterseinkommen verbessert, aber die Umlagelast nicht direkt ersetzt."
+        desc: "Alle Renten rein beitragsfinanziert, hoher demografischer Druck."
       },
       maxTaxes: {
         title: "Radikal: hohe Steuerfinanzierung f = 60 %",
         year: "theoretisch",
-        desc: "Radikal: 60 % der Rentenausgaben werden steuerfinanziert. Der Beitragssatz τ kann stark sinken, aber der Steuerzuschuss S steigt massiv. Die Last verlagert sich vom Faktor Arbeit auf den allgemeinen Steuerzahler und den Bundeshaushalt. Aktivrente und private Vorsorge sind moderat, so dass sich gut zeigen lässt, wie sich die drei Stellschrauben (q, f, γ, sowie gesetzlich vs. privat) gegenseitig beeinflussen."
+        desc: "Großer Steuerzuschuss, niedriger Beitragssatz, hohe Staatslast."
       }
     };
 
@@ -1073,7 +1067,6 @@
         TcPriv.value = 40;
         TrPriv.value = 20;
 
-        // Dynamik-Defaults (annähernd heutige Situation)
         Tdyn.value = 20;
         gCSlider.value = 0.0;
         gRSlider.value = 1.2;
@@ -1401,8 +1394,8 @@
         ctx.beginPath();
         let started = false;
         const steps = 200;
-        const colorGray = 200 + idx * 10;
-        ctx.strokeStyle = `rgba(${colorGray},${colorGray},${colorGray},0.8)`;
+        const gray = 200 + idx * 10;
+        ctx.strokeStyle = `rgba(${gray},${gray},${gray},0.8)`;
         for (let i = 0; i <= steps; i++) {
           const qVal = qMin + (i / steps) * (qMax - qMin);
           const denom = qVal * rhoLawDec;
@@ -1424,7 +1417,8 @@
         ctx.stroke();
       });
 
-      if (useTauOv && rhoLawDec > 0) {
+      const rhoLawDecSafe = rhoLawDec;
+      if (useTauOv && rhoLawDecSafe > 0) {
         const tauDecOv = tauOverrideVal / 100;
         ctx.strokeStyle = "white";
         ctx.lineWidth = 1.5;
@@ -1433,7 +1427,7 @@
         const steps = 300;
         for (let i = 0; i <= steps; i++) {
           const qVal = qMin + (i / steps) * (qMax - qMin);
-          const denom = qVal * rhoLawDec;
+          const denom = qVal * rhoLawDecSafe;
           if (denom <= 0) continue;
           let fVal = 1 - (tauDecOv * (1 + gammaDec * qVal)) / denom;
           if (fVal < fMin || fVal > fMax) {
@@ -1469,7 +1463,7 @@
       }
     }
 
-    function drawDynamicsChart(times, qSeries) {
+    function drawDynamicsChart(times, qSeries, tauSeries) {
       const ctx = qDynCanvas.getContext("2d");
       const width = qDynCanvas.clientWidth;
       const height = qDynCanvas.clientHeight;
@@ -1479,21 +1473,34 @@
 
       ctx.clearRect(0, 0, width, height);
 
+      if (!times.length) return;
+
       const paddingLeft = 45;
-      const paddingRight = 20;
+      const paddingRight = 45;
       const paddingTop = 20;
       const paddingBottom = 30;
 
       const plotW = width - paddingLeft - paddingRight;
       const plotH = height - paddingTop - paddingBottom;
-      if (plotW <= 0 || plotH <= 0 || times.length === 0) return;
+      if (plotW <= 0 || plotH <= 0) return;
 
       let minQ = Math.min(...qSeries);
       let maxQ = Math.max(...qSeries);
       if (!isFinite(minQ) || !isFinite(maxQ)) return;
       if (maxQ === minQ) {
-        minQ = minQ * 0.9;
-        maxQ = maxQ * 1.1;
+        minQ *= 0.9;
+        maxQ *= 1.1;
+      }
+
+      let minTau = Math.min(...tauSeries);
+      let maxTau = Math.max(...tauSeries);
+      if (!isFinite(minTau) || !isFinite(maxTau)) {
+        minTau = 0;
+        maxTau = 30;
+      }
+      if (maxTau === minTau) {
+        minTau *= 0.9;
+        maxTau *= 1.1;
       }
 
       const T = times[times.length - 1];
@@ -1509,10 +1516,10 @@
       ctx.fillStyle = "rgba(148,163,184,0.9)";
       ctx.font = "10px system-ui";
 
-      const xTicks = Math.min(5, T);
+      const xTicks = Math.min(5, T || 1);
       for (let i = 0; i <= xTicks; i++) {
         const tVal = (T * i) / xTicks;
-        const x = paddingLeft + (tVal / T) * plotW;
+        const x = paddingLeft + (T === 0 ? 0 : (tVal / T) * plotW);
         const y = paddingTop + plotH;
         ctx.beginPath();
         ctx.moveTo(x, y);
@@ -1536,7 +1543,24 @@
       ctx.save();
       ctx.translate(paddingLeft - 40, paddingTop + plotH / 2 + 10);
       ctx.rotate(-Math.PI / 2);
-      ctx.fillText("q(t) = N_R / N_C", 0, 0);
+      ctx.fillText("q(t) = N_R/N_C", 0, 0);
+      ctx.restore();
+
+      for (let i = 0; i <= yTicks; i++) {
+        const frac = i / yTicks;
+        const tauVal = minTau + (1 - frac) * (maxTau - minTau);
+        const y = paddingTop + frac * plotH;
+        const x = paddingLeft + plotW;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 4, y);
+        ctx.stroke();
+        ctx.fillText(tauVal.toFixed(1) + "%", x + 6, y + 3);
+      }
+      ctx.save();
+      ctx.translate(paddingLeft + plotW + 38, paddingTop + plotH / 2 + 10);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText("τ(t) [%]", 0, 0);
       ctx.restore();
 
       ctx.beginPath();
@@ -1552,11 +1576,35 @@
       ctx.lineWidth = 1.8;
       ctx.stroke();
 
+      ctx.beginPath();
+      for (let i = 0; i < times.length; i++) {
+        const t = times[i];
+        const tau = tauSeries[i];
+        const x = paddingLeft + (T === 0 ? 0 : (t / T) * plotW);
+        const y = paddingTop + ((maxTau - tau) / (maxTau - minTau)) * plotH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = "rgba(250,204,21,0.9)";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
       const xLast = paddingLeft + plotW;
       const qLast = qSeries[qSeries.length - 1];
-      const yLast = paddingTop + ((maxQ - qLast) / (maxQ - minQ)) * plotH;
+      const tauLast = tauSeries[tauSeries.length - 1];
+      const yLastQ = paddingTop + ((maxQ - qLast) / (maxQ - minQ)) * plotH;
+      const yLastTau = paddingTop + ((maxTau - tauLast) / (maxTau - minTau)) * plotH;
+
       ctx.beginPath();
-      ctx.arc(xLast, yLast, 4, 0, 2 * Math.PI);
+      ctx.arc(xLast, yLastQ, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.7)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(xLast, yLastTau, 4, 0, 2 * Math.PI);
       ctx.fillStyle = "#fff";
       ctx.fill();
       ctx.strokeStyle = "rgba(0,0,0,0.7)";
@@ -1568,7 +1616,7 @@
       const T = Number(Tdyn.value);
       const gC = Number(gCSlider.value) / 100;
       const gR = Number(gRSlider.value) / 100;
-      const M = Number(Mdyn.value); // Mio Personen / Jahr
+      const M = Number(Mdyn.value);
 
       TdynLabel.textContent = T.toFixed(0) + " a";
       gCLabel.textContent   = (gC * 100).toFixed(1) + " %";
@@ -1580,6 +1628,7 @@
 
       const times = [];
       const qSeries = [];
+      const tauSeries = [];
 
       let AEnd_bn = NaN;
       let SEnd_bn = NaN;
@@ -1600,6 +1649,7 @@
 
         times.push(t);
         qSeries.push(q);
+        tauSeries.push(tauPct);
 
         if (t === T) {
           AEnd_bn = A_bn;
@@ -1608,12 +1658,11 @@
           qEnd = q;
         }
 
-        // explizites Euler-Schrittverfahren
         NC = NC * (1 + gC) + M;
         NR = NR * (1 + gR);
       }
 
-      drawDynamicsChart(times, qSeries);
+      drawDynamicsChart(times, qSeries, tauSeries);
 
       qEndOut.textContent   = fmtRat(qEnd);
       tauEndOut.textContent = fmtPct(tauEndPct);
@@ -1720,8 +1769,11 @@
       updateDynamics(NC, NR, W, rhoDec, fDec, gammaDec);
     }
 
-    [nc, nr, w, rho, f, gamma, tauOv, sPriv, rPriv, TcPriv, TrPriv,
-     Tdyn, gCSlider, gRSlider, Mdyn].forEach(el => {
+    [
+      nc, nr, w, rho, f, gamma, tauOv,
+      sPriv, rPriv, TcPriv, TrPriv,
+      Tdyn, gCSlider, gRSlider, Mdyn
+    ].forEach(el => {
       el.addEventListener("input", update);
       el.addEventListener("change", update);
     });
@@ -1745,7 +1797,6 @@
       document.body.removeChild(link);
     });
 
-    // Start mit Status-quo-Szenario
     applyScenario("statusQuoDE");
   </script>
 </body>
