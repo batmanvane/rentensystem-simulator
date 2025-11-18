@@ -1,9 +1,8 @@
 # Rentensystem-Simulator
 
 Interaktiver, didaktischer Browser-Simulator für ein vereinfachtes Umlageverfahren mit
-Aktivrente und privater Vorsorge.
+Aktivrente, privater Vorsorge, Erwerbsmigrationsdynamik, Agentenbasierte Koalitionsdynamik.
 
-- Datei: **`rente.html`**
 - Läuft komplett clientseitig (nur HTML, CSS, JavaScript, MathJax).
 - Keine Backend-Abhängigkeiten.
 
