@@ -367,6 +367,34 @@
       text-align: right;
     }
 
+    /* Party policy preselection pills */
+    .pill-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .pill-btn {
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.8);
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--fg);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .pill-btn:hover {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: var(--accent);
+    }
+    .pill-btn.active {
+      background: rgba(56, 189, 248, 0.3);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
     @media (max-width: 400px) {
       body {
         padding: 4px;
@@ -526,6 +554,17 @@
         </div>
       </div>
 
+      <div class="field">
+        <label>Policy-Preselektion nach Partei</label>
+        <div class="pill-group">
+          <button type="button" class="pill-btn" data-party="CDU/CSU">CDU/CSU</button>
+          <button type="button" class="pill-btn" data-party="SPD">SPD</button>
+          <button type="button" class="pill-btn" data-party="Grüne">Grüne</button>
+          <button type="button" class="pill-btn" data-party="AfD">AfD</button>
+          <button type="button" class="pill-btn" data-party="Linke">Linke</button>
+        </div>
+      </div>
+
       <div class="info-box">
         <strong>Zentrale Forschungsfrage:</strong> Gegeben demografischer Druck \(q(t)\), welche
         Kombinationen von \((\rho,f,M_{\text{mig}})\) halten \(\tau \le \tau_{\max}\) ein?
@@ -533,7 +572,8 @@
         \[
           \tau_{\text{erf}} = \frac{q \,\rho\, (1-f)}{1 + \gamma\, q}
         \]
-        bestimmt die Machbarkeit.
+        bestimmt die Machbarkeit. Über die Party-Preselektion lassen sich Szenarien
+        mit parteispezifischen Idealparametern direkt auf die Haltelinien übertragen.
       </div>
 
       <canvas id="policySpaceCanvas"></canvas>
@@ -629,6 +669,7 @@
         Basierend auf Parteipräferenzen und Mehrheitserfordernissen werden mögliche Koalitionen
         simuliert. Jede Koalition verhandelt einen Kompromiss im Policy-Raum (gewichteter
         Mittelwert nach Sitzanteil). Machbarkeit wird gegen demografische Constraints validiert.
+        Koalitionen mit allen aktuell im Bundestag vertretenen Parteien (inkl. AfD) werden angezeigt.
       </div>
 
       <div class="btn-group">
@@ -646,6 +687,7 @@
       <div class="subtitle" style="margin-bottom: 8px;">
         Jahr für Jahr: Welche Koalitionen bleiben tragfähig, wenn \(q(t)\) steigt?
         Wann kollabiert der politisch machbare Raum (keine Koalition kann beide Haltelinien halten)?
+        Die Koalitionssuche umfasst alle Parteien inklusive AfD.
       </div>
 
       <div class="table-responsive">
@@ -724,7 +766,7 @@
       </div>
 
       <h3>Interpretation und Limitationen</h3>
-      <div class="subtitle" style="line-height:1.6;">
+      <div class="subtitle" style="line-height:1.6%;">
         Dieses Modell ist eine didaktische Vereinfachung der realen politischen
         Dynamik. Es abstrahiert von Wahlkampftaktik, öffentlicher Meinung, EU-Constraints,
         Generationenkapital, privater Vorsorge und regionalen Unterschieden.
@@ -835,6 +877,9 @@
 
     // Utility panel
     const utilityList = document.getElementById("utilityList");
+
+    // Party preselection pills
+    const pillButtons = document.querySelectorAll(".pill-btn");
 
     // Utility Functions
     function fmt(val, decimals = 2) {
@@ -1369,31 +1414,50 @@
     }
 
     function updatePartyDisplay() {
-  partyGrid.innerHTML = "";
+      partyGrid.innerHTML = "";
 
-  PARTIES.forEach(party => {
-    const card = document.createElement("div");
-    card.className = `party-card ${party.name.toLowerCase().replace(/\//g, '')}`;
+      PARTIES.forEach(party => {
+        const card = document.createElement("div");
+        card.className = `party-card ${party.name.toLowerCase().replace(/\//g, '')}`;
 
-    const seatPct = ((party.seats / TOTAL_SEATS) * 100).toFixed(1);
+        const seatPct = ((party.seats / TOTAL_SEATS) * 100).toFixed(1);
 
-    card.innerHTML = `
-      <div class="party-name" style="color: ${party.color}">${party.name}</div>
-      <div class="party-seats">${party.seats} Sitze (${seatPct}%)</div>
-      <div class="party-pref">tau* (Ideal): ${party.preferences.tau}%</div>
-      <div class="party-pref">rho* (Ideal): ${party.preferences.rho}%</div>
-      <div class="party-pref">f* (Ideal): ${party.preferences.f}%</div>
-      <div class="party-pref">M* (Ideal): ${party.preferences.mmig} Mio/a</div>
-      <div class="party-pref">
-        Gewichte (w_tau, w_rho, w_f, w_M):<br/>
-        ${party.weights.tau} / ${party.weights.rho} / ${party.weights.f} / ${party.weights.mmig}
-      </div>
-    `;
+        card.innerHTML = `
+          <div class="party-name" style="color: ${party.color}">${party.name}</div>
+          <div class="party-seats">${party.seats} Sitze (${seatPct}%)</div>
+          <div class="party-pref">tau* (Ideal): ${party.preferences.tau}%</div>
+          <div class="party-pref">rho* (Ideal): ${party.preferences.rho}%</div>
+          <div class="party-pref">f* (Ideal): ${party.preferences.f}%</div>
+          <div class="party-pref">M* (Ideal): ${party.preferences.mmig} Mio/a</div>
+          <div class="party-pref">
+            Gewichte (w_tau, w_rho, w_f, w_M):<br/>
+            ${party.weights.tau} / ${party.weights.rho} / ${party.weights.f} / ${party.weights.mmig}
+          </div>
+        `;
 
-    partyGrid.appendChild(card);
-  });
-}
+        partyGrid.appendChild(card);
+      });
+    }
 
+    // Apply party preset to tau_max, rho_min, M_mig
+    function applyPartyPreset(partyName) {
+      const party = PARTIES.find(p => p.name === partyName);
+      if (!party) return;
+
+      tauMaxInput.value = party.preferences.tau;
+      rhoMinInput.value = party.preferences.rho;
+      mmigInput.value = party.preferences.mmig;
+
+      pillButtons.forEach(btn => {
+        if (btn.dataset.party === partyName) {
+          btn.classList.add("active");
+        } else {
+          btn.classList.remove("active");
+        }
+      });
+
+      updateAll();
+    }
 
     function analyzeCoalitions() {
       const nc0 = Number(nc0Input.value);
@@ -1403,19 +1467,21 @@
       const rhoMin = Number(rhoMinInput.value);
       const gamma = Number(gammaInput.value);
 
-      const viableParties = PARTIES.filter(p => p.name !== "AfD");
+      // Jetzt alle Parteien inkl. AfD
       const coalitions = [];
 
-      for (let i = 0; i < viableParties.length; i++) {
-        for (let j = i + 1; j < viableParties.length; j++) {
-          coalitions.push([viableParties[i], viableParties[j]]);
+      // Zweier-Koalitionen
+      for (let i = 0; i < PARTIES.length; i++) {
+        for (let j = i + 1; j < PARTIES.length; j++) {
+          coalitions.push([PARTIES[i], PARTIES[j]]);
         }
       }
 
-      for (let i = 0; i < viableParties.length; i++) {
-        for (let j = i + 1; j < viableParties.length; j++) {
-          for (let k = j + 1; k < viableParties.length; k++) {
-            coalitions.push([viableParties[i], viableParties[j], viableParties[k]]);
+      // Dreier-Koalitionen
+      for (let i = 0; i < PARTIES.length; i++) {
+        for (let j = i + 1; j < PARTIES.length; j++) {
+          for (let k = j + 1; k < PARTIES.length; k++) {
+            coalitions.push([PARTIES[i], PARTIES[j], PARTIES[k]]);
           }
         }
       }
@@ -1519,7 +1585,8 @@
           const year = startYear + idx;
           const q = point.q;
 
-          const viableParties = PARTIES.filter(p => p.name !== "AfD");
+          // alle Parteien inkl. AfD
+          const viableParties = PARTIES;
           let viableCount = 0;
 
           for (let i = 0; i < viableParties.length; i++) {
@@ -1623,6 +1690,13 @@
 
     analyzeCoalitionsBtn.addEventListener("click", analyzeCoalitions);
     runTimeSeriesBtn.addEventListener("click", runTimeSeries);
+
+    pillButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const partyName = btn.dataset.party;
+        applyPartyPreset(partyName);
+      });
+    });
 
     // Initialization
     updatePartyDisplay();
