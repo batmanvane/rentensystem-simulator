@@ -9,7 +9,7 @@ Aktivrente, privater Vorsorge, Erwerbsmigrationsdynamik, Agentenbasierte Koaliti
 ## Verwendung
 
 1. Dieses Repository klonen oder als ZIP herunterladen.
-2. Die Datei `rente.html` im Browser öffnen.
+2. Die Dateien `rente.html` usw. je nach Interesse im Browser öffnen.
 
 ```bash
 git clone https://github.com/<DEIN_USERNAME>/rentensystem-simulator.git
