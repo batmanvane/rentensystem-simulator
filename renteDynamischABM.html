@@ -5,6 +5,20 @@
   <title>Rentensystem ABM: Politische Koalitionsdynamik</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes" />
 
+  <!-- MathJax v3 -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(','\\)'], ['$', '$']],
+        displayMath: [['\\[','\\]'], ['$$','$$']]
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script id="MathJax-script" async
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  </script>
+
   <style>
     :root {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -309,6 +323,14 @@
     .year-column {
       font-weight: 600;
     }
+    .footer {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(148, 163, 184, 0.35);
+      font-size: 0.7rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
     @media (max-width: 400px) {
       body {
         padding: 4px;
@@ -333,12 +355,16 @@
       <div class="subtitle">
         Agent-Based Model zur Analyse politischer Machbarkeit von Rentenpolitik unter demografischem Druck.
         Modellierung von Parteipräferenzen, Koalitionsbildung und Tragfähigkeit unter den Haltelinien-Constraints
-        (tau max 20%, rho min 48%) mit Erwerbsmigration als fiskalischem Stellhebel.
+        \((\tau_{\max} = 20\%,\, \rho_{\min} = 48\%)\) mit Erwerbsmigration als fiskalischem Stellhebel.
       </div>
       <div class="subtitle">
         Die politischen Agenten (Parteien im 21. Bundestag) haben Nutzenfunktionen über den Policy-Raum.
         Koalitionen bilden sich durch gewichtete Verhandlung und werden gegen die demografische Realität
-        q(t) = N_R / N_C validiert. Das Modell zeigt, wann der politisch machbare Raum kollabiert.
+        \(q(t) = \dfrac{N_R(t)}{N_C(t)}\) validiert. Das Modell zeigt, wann der politisch machbare Raum kollabiert.
+      </div>
+      <div class="subtitle">
+        Autor: Prof. Dr.-Ing. Robert Flassig (THB) • Version 0.1 • Stand: 18.11.2025 • Lizenz: CC&nbsp;BY-SA&nbsp;4.0 •
+        Hinweis: didaktisches Modell, keine politische Empfehlung.
       </div>
     </header>
 
@@ -355,14 +381,14 @@
         </div>
         <div class="field">
           <label>
-            Beitragszahler N_C,0 (Mio)
+            Beitragszahler \(N_{C,0}\) (Mio)
             <span class="value" id="nc0Label"></span>
           </label>
           <input id="nc0" type="range" min="30" max="50" step="1" value="40" />
         </div>
         <div class="field">
           <label>
-            Rentner N_R,0 (Mio)
+            Rentner \(N_{R,0}\) (Mio)
             <span class="value" id="nr0Label"></span>
           </label>
           <input id="nr0" type="range" min="15" max="30" step="1" value="21" />
@@ -372,21 +398,21 @@
       <div class="grid-3">
         <div class="field">
           <label>
-            Wachstumsrate g_C (% p.a.)
+            Wachstumsrate \(g_C\) (% p.a.)
             <span class="value" id="gcLabel"></span>
           </label>
           <input id="gc" type="range" min="-1.5" max="0.5" step="0.1" value="-0.2" />
         </div>
         <div class="field">
           <label>
-            Wachstumsrate g_R (% p.a.)
+            Wachstumsrate \(g_R\) (% p.a.)
             <span class="value" id="grLabel"></span>
           </label>
           <input id="gr" type="range" min="0" max="3" step="0.1" value="1.3" />
         </div>
         <div class="field">
           <label>
-            Durchschnittslohn w (k EUR)
+            Durchschnittslohn \(w\) (k EUR)
             <span class="value" id="wLabel"></span>
           </label>
           <input id="w" type="range" min="40" max="70" step="1" value="50" />
@@ -396,14 +422,14 @@
       <div class="grid-3">
         <div class="field">
           <label>
-            Horizont T (Jahre)
+            Horizont \(T\) (Jahre)
             <span class="value" id="horizonLabel"></span>
           </label>
           <input id="horizon" type="range" min="5" max="30" step="1" value="15" />
         </div>
         <div class="field">
           <label>
-            Aktivrente gamma (%)
+            Aktivrente \(\gamma\) (%)
             <span class="value" id="gammaLabel"></span>
           </label>
           <input id="gamma" type="range" min="0" max="20" step="1" value="3" />
@@ -412,37 +438,37 @@
 
       <div class="outputs">
         <div class="metric" id="qCurrentMetric">
-          <div class="metric-label">q_0 = N_R,0 / N_C,0</div>
+          <div class="metric-label">\(q_0 = N_{R,0} / N_{C,0}\)</div>
           <div class="metric-value" id="q0Out"></div>
         </div>
         <div class="metric" id="qEndMetric">
-          <div class="metric-label">q_T (Ende Horizont)</div>
+          <div class="metric-label">\(q_T\) (Ende Horizont)</div>
           <div class="metric-value" id="qTOut"></div>
         </div>
         <div class="metric">
-          <div class="metric-label">Delta q über T Jahre</div>
+          <div class="metric-label">\(\Delta q\) über \(T\) Jahre</div>
           <div class="metric-value" id="deltaQOut"></div>
         </div>
       </div>
 
       <div class="info-box">
-        <strong>Interpretation:</strong> Der Abhängigkeitsquotient q(t) quantifiziert den demografischen Druck
-        auf das Umlagesystem. Die Wachstumsraten g_C und g_R bestimmen die Geschwindigkeit der Verschiebung.
-        Aktivrente gamma kann den Effekt über zusätzliche Beitragskapazität der Rentner abmildern.
+        <strong>Interpretation:</strong> Der Abhängigkeitsquotient \(q(t)\) quantifiziert den demografischen Druck
+        auf das Umlagesystem. Die Wachstumsraten \(g_C\) und \(g_R\) bestimmen die Geschwindigkeit der Verschiebung.
+        Aktivrente \(\gamma\) kann den Effekt über zusätzliche Beitragskapazität der Rentner abmildern.
       </div>
     </section>
 
     <section class="card">
       <h2>Parteipräferenzen (21. Bundestag, Februar 2025)</h2>
       <div class="subtitle" style="margin-bottom: 8px;">
-        Jede Partei hat eine Nutzenfunktion U(tau, rho, f, M_mig) mit idealen Werten
+        Jede Partei hat eine Nutzenfunktion \(U(\tau,\rho,f,M_{\text{mig}})\) mit idealen Werten
         und Gewichtungen. Sitzverteilung entspricht der Bundestagswahl 2025 (630 Sitze).
       </div>
 
       <div class="party-grid" id="partyGrid"></div>
 
       <div class="info-box">
-        <strong>Modellierung:</strong> Utility = -Summe w_i * (x_i - x_i,ideal)^2.
+        <strong>Modellierung:</strong> \(U = -\sum_i w_i \bigl(x_i - x_{i,\text{ideal}}\bigr)^2\).<br/>
         Parteien mit höheren Gewichtungen bei bestimmten Parametern zeigen geringere Kompromissbereitschaft.
         Die Sitzverteilung bestimmt Koalitionsmöglichkeiten (Mehrheit: 316 Sitze).
       </div>
@@ -454,14 +480,14 @@
       <div class="grid-2">
         <div class="field">
           <label>
-            Max. Beitragssatz tau_max (%)
+            Max. Beitragssatz \(\tau_{\max}\) (%)
             <span class="value" id="tauMaxLabel"></span>
           </label>
           <input id="tauMax" type="range" min="18" max="24" step="0.5" value="20" />
         </div>
         <div class="field">
           <label>
-            Min. Rentenniveau rho_min (%)
+            Min. Rentenniveau \(\rho_{\min}\) (%)
             <span class="value" id="rhoMinLabel"></span>
           </label>
           <input id="rhoMin" type="range" min="40" max="52" step="1" value="48" />
@@ -469,16 +495,20 @@
       </div>
 
       <div class="info-box">
-        <strong>Zentrale Forschungsfrage:</strong> Gegeben demografischer Druck q(t), welche
-        Kombinationen von (rho, f, M_mig) halten tau kleiner gleich tau_max ein?
-        Die Identität tau = q * rho * (1-f) / (1 + gamma * q) bestimmt die Machbarkeit.
+        <strong>Zentrale Forschungsfrage:</strong> Gegeben demografischer Druck \(q(t)\), welche
+        Kombinationen von \((\rho,f,M_{\text{mig}})\) halten \(\tau \le \tau_{\max}\) ein?
+        Die Identität
+        \[
+          \tau_{\text{erf}} = \frac{q \,\rho\, (1-f)}{1 + \gamma\, q}
+        \]
+        bestimmt die Machbarkeit.
       </div>
 
       <canvas id="policySpaceCanvas"></canvas>
       <div class="legend">
         <div class="legend-item">
           <span class="legend-swatch" style="background: rgba(52,211,153,0.7);"></span>
-          Machbar (tau &lt; tau_max)
+          Machbar (\(\tau_{\text{erf}} \le \tau_{\max}\))
         </div>
         <div class="legend-item">
           <span class="legend-swatch" style="background: rgba(250,204,21,0.7);"></span>
@@ -486,7 +516,7 @@
         </div>
         <div class="legend-item">
           <span class="legend-swatch" style="background: rgba(239,68,68,0.7);"></span>
-          Unmöglich (tau &gt; tau_max)
+          Unmöglich (\(\tau_{\text{erf}} &gt; \tau_{\max}\))
         </div>
       </div>
     </section>
@@ -496,7 +526,7 @@
 
       <div class="field">
         <label>
-          Erwerbsmigration M_mig (Mio. Personen/Jahr)
+          Erwerbsmigration \(M_{\text{mig}}\) (Mio. Personen/Jahr)
           <span class="value" id="mmigLabel"></span>
         </label>
         <input id="mmig" type="range" min="0" max="1.0" step="0.05" value="0.3" />
@@ -504,19 +534,19 @@
 
       <div class="outputs">
         <div class="metric">
-          <div class="metric-label">N_C bei t=T (mit M_mig)</div>
+          <div class="metric-label">\(N_C(T)\) mit \(M_{\text{mig}}\)</div>
           <div class="metric-value" id="ncTWithMigOut"></div>
         </div>
         <div class="metric">
-          <div class="metric-label">N_C bei t=T (ohne M_mig)</div>
+          <div class="metric-label">\(N_C(T)\) ohne \(M_{\text{mig}}\)</div>
           <div class="metric-value" id="ncTNoMigOut"></div>
         </div>
         <div class="metric">
-          <div class="metric-label">Delta durch Migration</div>
+          <div class="metric-label">\(\Delta N_C(T)\) durch Migration</div>
           <div class="metric-value" id="migImpactOut"></div>
         </div>
         <div class="metric">
-          <div class="metric-label">Erforderl. M_mig für tau=tau_max</div>
+          <div class="metric-label">Erforderliches \(M_{\text{mig}}\) für \(\tau = \tau_{\max}\)</div>
           <div class="metric-value" id="requiredMigOut"></div>
         </div>
       </div>
@@ -524,22 +554,22 @@
       <div class="warning-box" id="migrationWarning" style="display:none;">
         <strong>Warnung:</strong> Die erforderliche Erwerbsmigration übersteigt
         historische oder politisch realistische Werte. Ohne zusätzliche Reformmaßnahmen
-        (höheres f, niedrigeres rho, höheres gamma) ist die Haltelinie nicht haltbar.
+        (höheres \(f\), niedrigeres \(\rho\), höheres \(\gamma\)) ist die Haltelinie nicht haltbar.
       </div>
 
       <canvas id="migrationCanvas"></canvas>
       <div class="legend">
         <div class="legend-item">
           <span class="legend-swatch" style="background: rgba(56,189,248,0.8);"></span>
-          tau_erf(t) mit akt. M_mig
+          \(\tau_{\text{erf}}(t)\) mit aktuellem \(M_{\text{mig}}\)
         </div>
         <div class="legend-item">
           <span class="legend-swatch" style="background: rgba(239,68,68,0.8);"></span>
-          tau_erf(t) ohne M_mig
+          \(\tau_{\text{erf}}(t)\) ohne \(M_{\text{mig}}\)
         </div>
         <div class="legend-item">
           <span class="legend-swatch" style="background: rgba(148,163,184,0.5); border: 2px dashed #fff;"></span>
-          tau_max Haltelinie
+          Haltelinie \(\tau_{\max}\)
         </div>
       </div>
     </section>
@@ -565,7 +595,7 @@
     <section class="card" id="timeSeriesSection" style="display:none;">
       <h2>Zeitreihenanalyse: Kollaps des Policy Space</h2>
       <div class="subtitle" style="margin-bottom: 8px;">
-        Jahr für Jahr: Welche Koalitionen bleiben tragfähig wenn q(t) steigt?
+        Jahr für Jahr: Welche Koalitionen bleiben tragfähig, wenn \(q(t)\) steigt?
         Wann kollabiert der politisch machbare Raum (keine Koalition kann beide Haltelinien halten)?
       </div>
 
@@ -574,9 +604,9 @@
           <thead>
             <tr>
               <th>Jahr</th>
-              <th>q(t)</th>
-              <th>tau_erf Ampel</th>
-              <th>tau_erf GroKo</th>
+              <th>\(q(t)\)</th>
+              <th>\(\tau_{\text{erf}}\) Ampel</th>
+              <th>\(\tau_{\text{erf}}\) GroKo</th>
               <th>Tragfähige</th>
               <th>Status</th>
             </tr>
@@ -593,7 +623,7 @@
         </div>
         <div class="legend-item">
           <span class="legend-swatch" style="background: rgba(56,189,248,0.7);"></span>
-          q(t) (rechte Achse)
+          \(q(t)\) (rechte Achse)
         </div>
       </div>
 
@@ -606,45 +636,61 @@
       <h3>Kernformeln</h3>
       <div class="info-box">
         <strong>Demografische Dynamik:</strong><br/>
-        N_C(t+1) = N_C(t) * (1 + g_C) + M_mig<br/>
-        N_R(t+1) = N_R(t) * (1 + g_R)<br/>
-        q(t) = N_R(t) / N_C(t)
+        \[
+          N_C(t+1) = N_C(t)\,\bigl(1 + g_C\bigr) + M_{\text{mig}}
+        \]<br/>
+        \[
+          N_R(t+1) = N_R(t)\,\bigl(1 + g_R\bigr)
+        \]<br/>
+        \[
+          q(t) = \frac{N_R(t)}{N_C(t)}
+        \]
       </div>
 
       <div class="info-box">
         <strong>Erforderlicher Beitragssatz:</strong><br/>
-        tau_erf = q * rho * (1-f) / (1 + gamma * q)<br/>
-        mit Haltelinie-Constraint: tau_erf kleiner gleich tau_max
+        \[
+          \tau_{\text{erf}} = \frac{q \,\rho\, (1-f)}{1 + \gamma\, q}
+        \]
+        mit Haltelinien-Constraint \(\tau_{\text{erf}} \le \tau_{\max}\).
       </div>
 
       <div class="info-box">
         <strong>Parteien-Utility:</strong><br/>
-        U = -w_tau * (tau - tau_ideal)^2
-            -w_rho * (rho - rho_ideal)^2
-            -w_f * (f - f_ideal)^2
-            -w_M * (M - M_ideal)^2
+        \[
+          U = -w_\tau\,(\tau - \tau_{\text{ideal}})^2
+              -w_\rho\,(\rho - \rho_{\text{ideal}})^2
+              -w_f\,(f - f_{\text{ideal}})^2
+              -w_M\,(M_{\text{mig}} - M_{\text{ideal}})^2
+        \]
       </div>
 
       <h3>Parteipräferenzen (Modellannahmen)</h3>
       <div class="subtitle" style="line-height:1.6;">
-        <strong>SPD:</strong> tau ca 18-19%, rho=48-50%, f ca 35%, M ca 0.4 (soziale Sicherung, moderat pro-Migration)<br/>
-        <strong>CDU/CSU:</strong> tau ca 18-20%, rho=46-48%, f ca 25%, M ca 0.25 (konservativ-pragmatisch)<br/>
-        <strong>Grüne:</strong> tau ca 19%, rho=50%, f ca 40%, M ca 0.5 (sozial-ökologisch, pro-Migration)<br/>
-        <strong>AfD:</strong> tau ca 19%, rho=52%, f ca 30%, M ca 0.05 (national-sozial, anti-Migration)<br/>
-        <strong>Linke:</strong> tau ca 20%, rho=52%, f ca 50%, M ca 0.4 (umverteilungsorientiert)
+        <strong>SPD:</strong> \(\tau \approx 18{,}5\%\), \(\rho = 48{-}50\%\), \(f \approx 35\%\), \(M_{\text{mig}} \approx 0{,}4\) Mio/a (soziale Sicherung, moderat pro Migration)<br/>
+        <strong>CDU/CSU:</strong> \(\tau \approx 19\%\), \(\rho = 46{-}48\%\), \(f \approx 25\%\), \(M_{\text{mig}} \approx 0{,}25\) Mio/a (konservativ-pragmatisch)<br/>
+        <strong>Grüne:</strong> \(\tau \approx 19\%\), \(\rho = 50\%\), \(f \approx 40\%\), \(M_{\text{mig}} \approx 0{,}5\) Mio/a (sozial-ökologisch, pro Migration)<br/>
+        <strong>AfD:</strong> \(\tau \approx 19\%\), \(\rho = 52\%\), \(f \approx 30\%\), \(M_{\text{mig}} \approx 0{,}05\) Mio/a (national-sozial, anti Migration)<br/>
+        <strong>Linke:</strong> \(\tau \approx 20\%\), \(\rho = 52\%\), \(f \approx 50\%\), \(M_{\text{mig}} \approx 0{,}4\) Mio/a (umverteilungsorientiert)
       </div>
 
       <h3>Interpretation und Limitationen</h3>
       <div class="subtitle" style="line-height:1.6;">
         Dieses Modell ist eine didaktische Vereinfachung der realen politischen
         Dynamik. Es abstrahiert von Wahlkampftaktik, öffentlicher Meinung, EU-Constraints,
-        Generationenkapital, privater Vorsorge, regionalen Unterschieden.
+        Generationenkapital, privater Vorsorge und regionalen Unterschieden.
         <br/><br/>
         Die Stärke liegt in der Strukturanalyse: Welche Trade-offs sind
         unvermeidlich? Wann wird der Raum politisch machbarer Kompromisse zu eng?
         Wie wirkt Migration als demografischer Puffer versus politische Konfliktlinie?
       </div>
     </section>
+
+    <div class="footer">
+      © 2025 Prof. Dr.-Ing. Robert Flassig, Technische Hochschule Brandenburg (THB).<br/>
+      Dieses interaktive Modell wurde mit Unterstützung von KI-Werkzeugen erstellt. Keine Haftung für politische
+      oder finanzielle Entscheidungen, die auf Basis der Simulation getroffen werden.
+    </div>
   </div>
 
   <script>
@@ -832,7 +878,7 @@
       const rect = canvas.getBoundingClientRect();
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const width = rect.width;
       const height = rect.height;
@@ -937,7 +983,7 @@
       const rect = canvas.getBoundingClientRect();
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const width = rect.width;
       const height = rect.height;
@@ -1040,11 +1086,14 @@
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
+      const rectVisible = timeSeriesSection.getBoundingClientRect();
+      if (rectVisible.width === 0) return; // falls doch unsichtbar, nicht zeichnen
+
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const width = rect.width;
       const height = rect.height;
@@ -1424,9 +1473,10 @@
         collapseWarning.style.display = "none";
       }
 
+      // WICHTIG: zuerst sichtbar machen, dann zeichnen -> nur einmal klicken nötig
+      timeSeriesSection.style.display = "block";
       drawTimeSeries(timeSeriesData);
 
-      timeSeriesSection.style.display = "block";
       timeSeriesSection.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
@@ -1438,8 +1488,10 @@
       drawMigrationImpact();
     }
 
-    [nc0Input, nr0Input, gcInput, grInput, wInput, horizonInput, gammaInput,
-     tauMaxInput, rhoMinInput, mmigInput, startYearInput].forEach(input => {
+    [
+      nc0Input, nr0Input, gcInput, grInput, wInput, horizonInput, gammaInput,
+      tauMaxInput, rhoMinInput, mmigInput, startYearInput
+    ].forEach(input => {
       input.addEventListener("input", updateAll);
       input.addEventListener("change", updateAll);
     });
