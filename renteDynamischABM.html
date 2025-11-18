@@ -523,13 +523,15 @@
       <div class="subtitle" style="margin-bottom: 8px;">
         Jede Partei hat eine Nutzenfunktion \(U(\tau,\rho,f,M_{\text{mig}})\) mit idealen Werten
         und Gewichtungen. Sitzverteilung entspricht der Bundestagswahl 2025 (630 Sitze).
+        Voreinstellung der Haltelinien nach Parteipräferenzen über die Auswahlchips im Abschnitt
+        „Haltelinien-Constraints und Policy Space“ unten.
       </div>
 
       <div class="party-grid" id="partyGrid"></div>
 
       <div class="info-box">
         <strong>Modellierung:</strong> \(U = -\sum_i w_i \bigl(x_i - x_{i,\text{ideal}}\bigr)^2\).<br/>
-        Parteien mit höheren Gewichtungen bei bestimmten Parametern zeigen geringere Kompromissbereitschaft.
+        Parteien mit höheren Gewichtungen bei bestimmten Parametern zeigen geringere Kompromissbereitschaft bei diesen Parametern.
         Die Sitzverteilung bestimmt Koalitionsmöglichkeiten (Mehrheit: 316 Sitze).
       </div>
     </section>
@@ -757,7 +759,7 @@
       </div>
 
       <h3>Parteipräferenzen (Modellannahmen)</h3>
-      <div class="subtitle" style="line-height:1.6;">
+      <div class="subtitle" style="line-height:1.6%;">
         <strong>SPD:</strong> \(\tau \approx 18{,}5\%\), \(\rho = 48{-}50\%\), \(f \approx 35\%\), \(M_{\text{mig}} \approx 0{,}4\) Mio/a (soziale Sicherung, moderat pro Migration)<br/>
         <strong>CDU/CSU:</strong> \(\tau \approx 19\%\), \(\rho = 46{-}48\%\), \(f \approx 25\%\), \(M_{\text{mig}} \approx 0{,}25\) Mio/a (konservativ-pragmatisch)<br/>
         <strong>Grüne:</strong> \(\tau \approx 19\%\), \(\rho = 50\%\), \(f \approx 40\%\), \(M_{\text{mig}} \approx 0{,}5\) Mio/a (sozial-ökologisch, pro Migration)<br/>
@@ -840,7 +842,7 @@
 
     const startYearLabel = document.getElementById("startYearLabel");
     const nc0Label = document.getElementById("nc0Label");
-    const nr0Label = document.getElementById("nr0Label");
+    const nr0Label = document.getElementElementById?.("nr0Label") || document.getElementById("nr0Label");
     const gcLabel = document.getElementById("gcLabel");
     const grLabel = document.getElementById("grLabel");
     const wLabel = document.getElementById("wLabel");
@@ -1425,18 +1427,22 @@
         card.innerHTML = `
           <div class="party-name" style="color: ${party.color}">${party.name}</div>
           <div class="party-seats">${party.seats} Sitze (${seatPct}%)</div>
-          <div class="party-pref">tau* (Ideal): ${party.preferences.tau}%</div>
-          <div class="party-pref">rho* (Ideal): ${party.preferences.rho}%</div>
-          <div class="party-pref">f* (Ideal): ${party.preferences.f}%</div>
-          <div class="party-pref">M* (Ideal): ${party.preferences.mmig} Mio/a</div>
+          <div class="party-pref">\\(\\tau^*\\): ${party.preferences.tau}\\%</div>
+          <div class="party-pref">\\(\\rho^*\\): ${party.preferences.rho}\\%</div>
+          <div class="party-pref">\\(f^*\\): ${party.preferences.f}\\%</div>
+          <div class="party-pref">\\(M^*_{\\text{mig}}\\): ${party.preferences.mmig} Mio/a</div>
           <div class="party-pref">
-            Gewichte (w_tau, w_rho, w_f, w_M):<br/>
-            ${party.weights.tau} / ${party.weights.rho} / ${party.weights.f} / ${party.weights.mmig}
+            \\((w_\\tau, w_\\rho, w_f, w_M) = (${party.weights.tau}, ${party.weights.rho}, ${party.weights.f}, ${party.weights.mmig})\\)
           </div>
         `;
 
         partyGrid.appendChild(card);
       });
+
+      // MathJax nach dynamischem Einfügen neu laufen lassen
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        MathJax.typesetPromise([partyGrid]);
+      }
     }
 
     // Apply party preset to tau_max, rho_min, M_mig
