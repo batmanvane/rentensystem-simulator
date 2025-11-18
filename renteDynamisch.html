@@ -692,10 +692,11 @@
         </div>
       </div>
       <div class="export-bar">
-      <button id="exportDynBtn" class="export-btn">
-      Zeitpfade als PNG exportieren
-      </button>
+        <button id="exportDynBtn" class="export-btn">
+          Zeitpfade als PNG exportieren
+        </button>
       </div>
+
       <div class="contour-caption" id="dynCaption">
         Zeitentwicklung von \(q(t) = N_R(t)/N_C(t)\) und dem dazugehörigen Beitragssatz \(\tau(t)\).
         Ausgangspunkt sind die oben gewählten Werte für \(N_C\) und \(N_R\). Das letzte Jahr \(T\) wird
@@ -764,7 +765,7 @@
         \(\tau\) der Beitragssatz und \(f\) der Anteil der Rentenausgaben, der aus
         Steuern finanziert wird.
       </p>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Gesamtausgaben für gesetzliche Renten:
         <span class="math-inline">\(A = N_R \cdot \bar p\)</span>.<br/>
         Einnahmen aus Beiträgen (ohne Aktivrente):
@@ -1014,6 +1015,7 @@
     const SEndOut  = document.getElementById("SEndOut");
 
     const qDynCanvas = document.getElementById("qDynamics");
+    const exportDynBtn = document.getElementById("exportDynBtn");
 
     const scenarioTexts = {
       statusQuoDE: {
@@ -1489,27 +1491,41 @@
       const plotH = height - paddingTop - paddingBottom;
       if (plotW <= 0 || plotH <= 0) return;
 
-      let minQ = Math.min(...qSeries);
-      let maxQ = Math.max(...qSeries);
-      if (!isFinite(minQ) || !isFinite(maxQ)) return;
-      if (maxQ === minQ) {
-        minQ *= 0.9;
-        maxQ *= 1.1;
-      }
+      // Nur gültige Werte benutzen
+      const validIdx = times
+        .map((_, i) => i)
+        .filter(i => isFinite(qSeries[i]) && isFinite(tauSeries[i]));
+      if (!validIdx.length) return;
 
-      let minTau = Math.min(...tauSeries);
-      let maxTau = Math.max(...tauSeries);
+      const qVals = validIdx.map(i => qSeries[i]);
+      const tauVals = validIdx.map(i => tauSeries[i]);
+
+      let minQ = Math.min(...qVals);
+      let maxQ = Math.max(...qVals);
+      if (!isFinite(minQ) || !isFinite(maxQ)) return;
+
+      // Puffer auf q-Achse
+      let qRange = maxQ - minQ;
+      if (qRange <= 0) qRange = Math.max(Math.abs(minQ), 0.1) * 0.2;
+      const qPad = qRange * 0.15;
+      const minQPlot = Math.max(0, minQ - qPad);
+      const maxQPlot = maxQ + qPad;
+
+      let minTau = Math.min(...tauVals);
+      let maxTau = Math.max(...tauVals);
       if (!isFinite(minTau) || !isFinite(maxTau)) {
         minTau = 0;
         maxTau = 30;
       }
-      if (maxTau === minTau) {
-        minTau *= 0.9;
-        maxTau *= 1.1;
-      }
+      let tauRange = maxTau - minTau;
+      if (tauRange <= 0) tauRange = Math.max(Math.abs(minTau), 5) * 0.3;
+      const tauPad = tauRange * 0.15;
+      const minTauPlot = Math.max(0, minTau - tauPad);
+      const maxTauPlot = maxTau + tauPad;
 
       const T = times[times.length - 1];
 
+      // Achsen
       ctx.strokeStyle = "rgba(148,163,184,0.8)";
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -1521,6 +1537,7 @@
       ctx.fillStyle = "rgba(148,163,184,0.9)";
       ctx.font = "10px system-ui";
 
+      // x-Achse (Zeit)
       const xTicks = Math.min(5, T || 1);
       for (let i = 0; i <= xTicks; i++) {
         const tVal = (T * i) / xTicks;
@@ -1534,10 +1551,11 @@
       }
       ctx.fillText("Jahre", paddingLeft + plotW / 2 - 15, paddingTop + plotH + 26);
 
+      // linke y-Achse: q(t)
       const yTicks = 4;
       for (let i = 0; i <= yTicks; i++) {
         const frac = i / yTicks;
-        const qVal = minQ + (1 - frac) * (maxQ - minQ);
+        const qVal = minQPlot + (1 - frac) * (maxQPlot - minQPlot);
         const y = paddingTop + frac * plotH;
         ctx.beginPath();
         ctx.moveTo(paddingLeft - 4, y);
@@ -1551,9 +1569,10 @@
       ctx.fillText("q(t) = N_R/N_C", 0, 0);
       ctx.restore();
 
+      // rechte y-Achse: τ(t)
       for (let i = 0; i <= yTicks; i++) {
         const frac = i / yTicks;
-        const tauVal = minTau + (1 - frac) * (maxTau - minTau);
+        const tauVal = minTauPlot + (1 - frac) * (maxTauPlot - minTauPlot);
         const y = paddingTop + frac * plotH;
         const x = paddingLeft + plotW;
         ctx.beginPath();
@@ -1568,52 +1587,65 @@
       ctx.fillText("τ(t) [%]", 0, 0);
       ctx.restore();
 
-      ctx.beginPath();
-      for (let i = 0; i < times.length; i++) {
-        const t = times[i];
-        const q = qSeries[i];
-        const x = paddingLeft + (T === 0 ? 0 : (t / T) * plotW);
-        const y = paddingTop + ((maxQ - q) / (maxQ - minQ)) * plotH;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.strokeStyle = "rgba(56,189,248,0.9)";
-      ctx.lineWidth = 1.8;
-      ctx.stroke();
+      // Hilfsfunktionen für Mapping
+      const xOf = (t) => paddingLeft + (T === 0 ? 0 : (t / T) * plotW);
+      const yOfQ = (q) =>
+        paddingTop + ((maxQPlot - q) / (maxQPlot - minQPlot)) * plotH;
+      const yOfTau = (tau) =>
+        paddingTop + ((maxTauPlot - tau) / (maxTauPlot - minTauPlot)) * plotH;
 
+      // 1) τ(t) zuerst (dünner, im Hintergrund)
       ctx.beginPath();
-      for (let i = 0; i < times.length; i++) {
+      validIdx.forEach((i, k) => {
         const t = times[i];
         const tau = tauSeries[i];
-        const x = paddingLeft + (T === 0 ? 0 : (t / T) * plotW);
-        const y = paddingTop + ((maxTau - tau) / (maxTau - minTau)) * plotH;
-        if (i === 0) ctx.moveTo(x, y);
+        const x = xOf(t);
+        const y = yOfTau(tau);
+        if (k === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
-      }
-      ctx.strokeStyle = "rgba(250,204,21,0.9)";
+      });
+      ctx.strokeStyle = "rgba(250,204,21,0.9)"; // gelb
       ctx.lineWidth = 1.4;
       ctx.stroke();
 
-      const xLast = paddingLeft + plotW;
-      const qLast = qSeries[qSeries.length - 1];
-      const tauLast = tauSeries[tauSeries.length - 1];
-      const yLastQ = paddingTop + ((maxQ - qLast) / (maxQ - minQ)) * plotH;
-      const yLastTau = paddingTop + ((maxTau - tauLast) / (maxTau - minTau)) * plotH;
-
+      // 2) q(t) oben drauf (dicker, auffällig)
       ctx.beginPath();
-      ctx.arc(xLast, yLastQ, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = "#fff";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(0,0,0,0.7)";
-      ctx.lineWidth = 1;
+      validIdx.forEach((i, k) => {
+        const t = times[i];
+        const q = qSeries[i];
+        const x = xOf(t);
+        const y = yOfQ(q);
+        if (k === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = "rgba(56,189,248,0.95)"; // kräftiges Cyan
+      ctx.lineWidth = 2.2;
       ctx.stroke();
 
+      // Endpunkte markieren (t = T)
+      const lastIdx = validIdx[validIdx.length - 1];
+      const xLast = xOf(times[lastIdx]);
+      const qLast = qSeries[lastIdx];
+      const tauLast = tauSeries[lastIdx];
+      const yLastQ = yOfQ(qLast);
+      const yLastTau = yOfTau(tauLast);
+
+      // Marker für q(T)
+      ctx.beginPath();
+      ctx.arc(xLast, yLastQ, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(56,189,248,0.9)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Marker für τ(T)
       ctx.beginPath();
       ctx.arc(xLast, yLastTau, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = "#ffffff";
       ctx.fill();
-      ctx.strokeStyle = "rgba(0,0,0,0.7)";
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(250,204,21,0.9)";
+      ctx.lineWidth = 1.2;
       ctx.stroke();
     }
 
@@ -1792,16 +1824,31 @@
       });
     });
 
-    exportChartBtn.addEventListener("click", () => {
-      const url = contourCanvas.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "rentenmodell_contour.png";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    });
+    if (exportChartBtn) {
+      exportChartBtn.addEventListener("click", () => {
+        const url = contourCanvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "rentenmodell_contour.png";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+    }
 
+    if (exportDynBtn) {
+      exportDynBtn.addEventListener("click", () => {
+        const url = qDynCanvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "rentenmodell_dynamik.png";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+    }
+
+    // Start mit Status-quo-Szenario
     applyScenario("statusQuoDE");
   </script>
 </body>
