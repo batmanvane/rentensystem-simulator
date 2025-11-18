@@ -400,8 +400,8 @@
     <header>
       <h1>Rentensystem-Simulator</h1>
       <div class="subtitle">
-        <strong>Einfaches Umlage-Modell</strong> mit Erweiterung um Aktivrente \(\gamma\), private Vorsorge
-        und ein dynamisches Demografie-Modell mit Erwerbsmigration.
+        <strong>Einfaches Umlagemodell</strong> mit Erweiterung um Aktivrente \(\gamma\), private Vorsorge
+        und ein dynamisches Demografiemodell mit Erwerbsmigration.
       </div>
       <div class="math-block">
         \[
@@ -418,8 +418,8 @@
         Rentnern zu Beitragszahlern, \(\rho_{\text{gesetz}}\) das gesetzliche Rentenniveau (durchschnittliche
         Rente in&nbsp;% des Lohns), \(f\) der Anteil der Rentenausgaben, der
         aus Steuern finanziert wird, und \(\gamma\) misst die beitragspflichtige Erwerbsintensität
-        der Rentner (Aktivrente). Eine zusätzliche private Rente wird über \(\rho_{\text{privat}}\) modelliert.
-        Das dynamische Demografie-Modell koppelt \(N_C(t)\), \(N_R(t)\) mit einem
+        der Rentner (Aktivrente). Eine zusätzliche private Rente wird über \(\rho_{\text{privat}}\) modelliert - ist aber nicht direkt Teil des Umlagemodells (Details siehe <a href="#modell-details">Modellbeschreibung</a>).
+        Das dynamische Demografiemodell koppelt \(N_C(t)\), \(N_R(t)\) mit einem
         Quellterm für Erwerbsmigration \(M_{\text{mig}}\).
       </div>
     </header>
@@ -644,7 +644,7 @@
 
     <!-- DYNAMISCHES MODELL -->
     <section class="card full-width" id="dynamics">
-      <h2>Dynamisches Demografie-Modell: Umlage & Erwerbsmigration</h2>
+      <h2>Dynamisches Demografiemodell: Umlage & Erwerbsmigration</h2>
 
       <h3>Dynamik-Parameter (vereinfachtes Jahresmodell)</h3>
       <div class="grid-2">
@@ -794,7 +794,7 @@
         </tbody>
       </table>
 
-      <h3>Herleitung des einfachen Umlage-Modells</h3>
+      <h3>Herleitung des einfachen Umlagemodells</h3>
       <p class="sources-list" style="line-height:1.45;">
         Im Umlageverfahren werden die laufenden Renten aus den laufenden Beiträgen
         und Steuerzuschüssen finanziert. Sei \(N_C\) die Zahl der Beitragszahler,
@@ -827,7 +827,7 @@
       <p class="sources-list" style="line-height:1.45;">
         Definiert man das gesetzliche Rentenniveau
         \(\rho_{\text{gesetz}} = \bar p / \bar w\) und den Abhängigkeitsquotienten
-        \(q = N_R / N_C\), erhält man das einfache Umlage-Modell:
+        \(q = N_R / N_C\), erhält man das einfache Umlagemodell:
       </p>
       <div class="math-block">
         \[
@@ -867,7 +867,7 @@
 \]
       </div>
       <p class="sources-list" style="line-height:1.45;">
-        Für \(\gamma = 0\) erhält man wieder das einfache Umlage-Modell.
+        Für \(\gamma = 0\) erhält man wieder das einfache Umlagemodell.
         Je größer \(\gamma\), desto stärker verschiebt die Aktivrente die demografische Last, weil ein Teil der
         Rentner wieder zur Beitragsbasis gehört.
       </p>
@@ -915,10 +915,10 @@
         <span class="math-inline">\(\rho_{\text{gesamt}} = \rho_{\text{gesetz}} + \rho_{\text{privat}}\)</span>.
       </p>
 
-      <h3>Dynamisches Demografie-Modell mit Erwerbsmigration</h3>
+      <h3>Dynamisches Demografiemodell mit Erwerbsmigration</h3>
       <p class="sources-list" style="line-height:1.45;">
         Um nicht nur statische Zustände, sondern die Entwicklung des Systems zu untersuchen, wird das
-        Umlage-Modell mit einem einfachen <strong>dynamischen Demografie-Modell</strong> gekoppelt.
+        Umlagemodell mit einem einfachen <strong>dynamischen Demografiemodell</strong> gekoppelt.
         Ausgangspunkt sind die aktuellen Werte \(N_C(0)\), \(N_R(0)\) aus den Slidern. Für jedes Jahr
         \(t = 0, 1, \dots, T-1\) gilt:
       </p>
