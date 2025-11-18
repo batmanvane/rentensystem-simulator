@@ -331,6 +331,42 @@
       color: var(--muted);
       line-height: 1.4;
     }
+    /* Utility-Panel */
+    .utility-panel {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      font-size: clamp(0.7rem, 2vw, 0.8rem);
+    }
+    .utility-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .utility-name {
+      font-weight: 600;
+      flex: 0 0 90px;
+    }
+    .utility-value {
+      flex: 0 0 80px;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+    }
+    .utility-bar {
+      flex: 1 1 140px;
+      font-family: "SF Mono","JetBrains Mono",ui-monospace,monospace;
+      font-size: 0.75rem;
+    }
+    .utility-pct {
+      flex: 0 0 90px;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
     @media (max-width: 400px) {
       body {
         padding: 4px;
@@ -522,6 +558,23 @@
     </section>
 
     <section class="card">
+      <h2>Partei-Utility für aktuelle Policy</h2>
+      <div class="subtitle" style="margin-bottom: 8px;">
+        Für die aktuellen Slider-Stände wird eine einfache Utility
+        \(U(\tau,\rho,f,M_{\text{mig}})\) pro Partei berechnet.
+        Als „aktuelle Policy“ gilt hier:
+        \(\tau = \tau_{\max}\), \(\rho = \rho_{\min}\),
+        \(f = 30\%\) (fester Steueranteil),
+        \(M_{\text{mig}}\) wie im Slider oben.
+        Die Zufriedenheitsskala ist relativ zur unzufriedensten Partei (0&nbsp;%)
+        bis zu optimaler Anpassung (100&nbsp;%).
+      </div>
+      <div class="utility-panel" id="utilityList">
+        <!-- Wird per JS gefüllt -->
+      </div>
+    </section>
+
+    <section class="card">
       <h2>Erwerbsmigration als Politischer Stellhebel</h2>
 
       <div class="field">
@@ -687,9 +740,7 @@
     </section>
 
     <div class="footer">
-      © 2025 Prof. Dr.-Ing. Robert Flassig, Technische Hochschule Brandenburg (THB).<br/>
-      Dieses interaktive Modell wurde mit Unterstützung von KI-Werkzeugen erstellt. Keine Haftung für politische
-      oder finanzielle Entscheidungen, die auf Basis der Simulation getroffen werden.
+      Last update: 2025-11-18 · Author: Robert Flassig · MIT License · Code basis: AI-assisted coding
     </div>
   </div>
 
@@ -786,6 +837,9 @@
     const q0Metric = document.getElementById("qCurrentMetric");
     const qTMetric = document.getElementById("qEndMetric");
 
+    // Utility panel
+    const utilityList = document.getElementById("utilityList");
+
     // Utility Functions
     function fmt(val, decimals = 2) {
       return isFinite(val) ? val.toFixed(decimals) : "–";
@@ -866,6 +920,76 @@
       }
 
       return (low + high) / 2;
+    }
+
+    // Partei-Utility für aktuelle Policy
+    function computePartyUtility(party, policy) {
+      const p = party.preferences;
+      const w = party.weights;
+      const dTau = policy.tau - p.tau;
+      const dRho = policy.rho - p.rho;
+      const dF = policy.f - p.f;
+      const dM = policy.mmig - p.mmig;
+
+      const U = -(
+        w.tau * dTau * dTau +
+        w.rho * dRho * dRho +
+        w.f * dF * dF +
+        w.mmig * dM * dM
+      );
+      return U;
+    }
+
+    function updateUtilities() {
+      if (!utilityList) return;
+
+      const policy = {
+        tau: Number(tauMaxInput.value),
+        rho: Number(rhoMinInput.value),
+        f: 30, // fixer Steueranteil für das Utility-Panel
+        mmig: Number(mmigInput.value)
+      };
+
+      const utilities = PARTIES.map(p => ({
+        party: p,
+        U: computePartyUtility(p, policy)
+      }));
+
+      let minU = Infinity;
+      utilities.forEach(u => {
+        if (u.U < minU) minU = u.U;
+      });
+      if (!isFinite(minU) || minU >= 0) {
+        minU = -1;
+      }
+
+      utilities.forEach(u => {
+        let satisfaction = (u.U - minU) / (0 - minU);
+        satisfaction = Math.max(0, Math.min(1, satisfaction));
+        u.satisfaction = satisfaction * 100;
+      });
+
+      utilities.sort((a, b) => b.satisfaction - a.satisfaction);
+
+      utilityList.innerHTML = "";
+      utilities.forEach(u => {
+        const barLength = 10;
+        const filled = Math.round((u.satisfaction / 100) * barLength);
+        let bar = "";
+        for (let i = 0; i < barLength; i++) {
+          bar += i < filled ? "█" : "░";
+        }
+
+        const row = document.createElement("div");
+        row.className = "utility-row";
+        row.innerHTML = `
+          <div class="utility-name">${u.party.name}</div>
+          <div class="utility-value">U = ${fmt(u.U, 1)}</div>
+          <div class="utility-bar">[${bar}]</div>
+          <div class="utility-pct">${fmt(u.satisfaction, 0)}% zufrieden</div>
+        `;
+        utilityList.appendChild(row);
+      });
     }
 
     // Visualization Functions
@@ -1087,7 +1211,7 @@
       if (!ctx) return;
 
       const rectVisible = timeSeriesSection.getBoundingClientRect();
-      if (rectVisible.width === 0) return; // falls doch unsichtbar, nicht zeichnen
+      if (rectVisible.width === 0) return;
 
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
@@ -1473,7 +1597,6 @@
         collapseWarning.style.display = "none";
       }
 
-      // WICHTIG: zuerst sichtbar machen, dann zeichnen -> nur einmal klicken nötig
       timeSeriesSection.style.display = "block";
       drawTimeSeries(timeSeriesData);
 
@@ -1486,6 +1609,7 @@
       updateDemographics();
       drawPolicySpace();
       drawMigrationImpact();
+      updateUtilities();
     }
 
     [
