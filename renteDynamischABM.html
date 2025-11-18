@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Rentensystem ABM: Politische Koalitionsdynamik</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes" />
+
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg: #0f172a;
+      --fg: #e5e7eb;
+      --accent: #38bdf8;
+      --card: #111827;
+      --muted: #9ca3af;
+      --spd: #E3000F;
+      --cdu: #000000;
+      --gruene: #64A12D;
+      --afd: #009EE0;
+      --linke: #BE3075;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%);
+      color: var(--fg);
+      min-height: 100vh;
+      padding: 8px;
+    }
+    .app {
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 8px;
+    }
+    header {
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: clamp(1.2rem, 4vw, 1.6rem);
+      margin: 0 0 8px 0;
+      line-height: 1.2;
+    }
+    h2 {
+      font-size: clamp(1rem, 3vw, 1.1rem);
+      margin: 0 0 10px 0;
+    }
+    h3 {
+      font-size: clamp(0.85rem, 2.5vw, 0.95rem);
+      margin: 14px 0 8px;
+    }
+    .subtitle {
+      font-size: clamp(0.75rem, 2vw, 0.9rem);
+      color: var(--muted);
+      line-height: 1.5;
+      margin-top: 6px;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 12px;
+      padding: clamp(12px, 3vw, 18px);
+      margin-bottom: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+      gap: 12px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+      gap: 12px;
+    }
+    .field {
+      margin-bottom: 10px;
+    }
+    .field label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: clamp(0.75rem, 2vw, 0.85rem);
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .field span.value {
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    input[type="range"] {
+      width: 100%;
+      min-width: 0;
+    }
+    input[type="number"] {
+      width: min(90px, 100%);
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.7);
+      color: var(--fg);
+      font-size: 0.85rem;
+    }
+    .party-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .party-card {
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 2px solid;
+    }
+    .party-card.spd { border-color: var(--spd); }
+    .party-card.cducsu { border-color: var(--cdu); }
+    .party-card.gruene { border-color: var(--gruene); }
+    .party-card.afd { border-color: var(--afd); }
+    .party-card.linke { border-color: var(--linke); }
+    .party-name {
+      font-weight: 600;
+      font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+      margin-bottom: 6px;
+    }
+    .party-seats {
+      font-size: clamp(0.7rem, 2vw, 0.8rem);
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .party-pref {
+      font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+      line-height: 1.4;
+      margin-bottom: 3px;
+    }
+    .coalition-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .coalition-card {
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+    .coalition-card.viable {
+      border: 2px solid rgba(52, 211, 153, 0.8);
+      background: rgba(52, 211, 153, 0.1);
+    }
+    .coalition-card.critical {
+      border: 2px solid rgba(250, 204, 21, 0.8);
+      background: rgba(250, 204, 21, 0.1);
+    }
+    .coalition-card.impossible {
+      border: 2px solid rgba(239, 68, 68, 0.8);
+      background: rgba(239, 68, 68, 0.1);
+    }
+    .coalition-name {
+      font-weight: 600;
+      font-size: clamp(0.75rem, 2vw, 0.85rem);
+      margin-bottom: 4px;
+    }
+    .coalition-seats {
+      font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .coalition-policy {
+      font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+      line-height: 1.3;
+      margin-bottom: 3px;
+    }
+    .coalition-feasibility {
+      font-size: clamp(0.7rem, 2vw, 0.8rem);
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(148, 163, 184, 0.3);
+      font-weight: 600;
+    }
+    .outputs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .metric {
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    .metric-label {
+      font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+    .metric-value {
+      font-size: clamp(0.85rem, 2.2vw, 0.98rem);
+      font-variant-numeric: tabular-nums;
+    }
+    .metric.alert {
+      border-color: rgba(239, 68, 68, 0.8);
+      background: rgba(239, 68, 68, 0.1);
+    }
+    .metric.warning {
+      border-color: rgba(250, 204, 21, 0.8);
+      background: rgba(250, 204, 21, 0.1);
+    }
+    .metric.good {
+      border-color: rgba(52, 211, 153, 0.8);
+      background: rgba(52, 211, 153, 0.1);
+    }
+    canvas {
+      width: 100%;
+      height: clamp(220px, 40vw, 320px);
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: #020617;
+      display: block;
+      margin-top: 8px;
+      touch-action: pan-y;
+    }
+    .legend {
+      margin-top: 6px;
+      font-size: clamp(0.65rem, 1.8vw, 0.78rem);
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .btn {
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      padding: 8px 16px;
+      font-size: clamp(0.75rem, 2vw, 0.85rem);
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--fg);
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.15s;
+      width: 100%;
+      text-align: center;
+    }
+    .btn:hover {
+      background: rgba(56, 189, 248, 0.3);
+      border-color: var(--accent);
+    }
+    .btn-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .info-box {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      font-size: clamp(0.75rem, 2vw, 0.85rem);
+      line-height: 1.5;
+    }
+    .warning-box {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(250, 204, 21, 0.1);
+      border: 1px solid rgba(250, 204, 21, 0.6);
+      font-size: clamp(0.75rem, 2vw, 0.85rem);
+      line-height: 1.5;
+    }
+    .table-responsive {
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+    table {
+      width: 100%;
+      min-width: 500px;
+      border-collapse: collapse;
+      font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+    }
+    th, td {
+      padding: 6px 8px;
+      text-align: left;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    th {
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .year-column {
+      font-weight: 600;
+    }
+    @media (max-width: 400px) {
+      body {
+        padding: 4px;
+      }
+      .app {
+        padding: 4px;
+      }
+      .card {
+        padding: 10px;
+        border-radius: 8px;
+      }
+      canvas {
+        height: 200px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Rentensystem-ABM: Politische Koalitionsdynamik Deutschland 2025</h1>
+      <div class="subtitle">
+        Agent-Based Model zur Analyse politischer Machbarkeit von Rentenpolitik unter demografischem Druck.
+        Modellierung von Parteipräferenzen, Koalitionsbildung und Tragfähigkeit unter den Haltelinien-Constraints
+        (tau max 20%, rho min 48%) mit Erwerbsmigration als fiskalischem Stellhebel.
+      </div>
+      <div class="subtitle">
+        Die politischen Agenten (Parteien im 21. Bundestag) haben Nutzenfunktionen über den Policy-Raum.
+        Koalitionen bilden sich durch gewichtete Verhandlung und werden gegen die demografische Realität
+        q(t) = N_R / N_C validiert. Das Modell zeigt, wann der politisch machbare Raum kollabiert.
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>Demografische Ausgangslage und Projektion</h2>
+
+      <div class="grid-3">
+        <div class="field">
+          <label>
+            Startzeitpunkt (Jahr)
+            <span class="value" id="startYearLabel"></span>
+          </label>
+          <input id="startYear" type="number" min="2024" max="2030" step="1" value="2025" />
+        </div>
+        <div class="field">
+          <label>
+            Beitragszahler N_C,0 (Mio)
+            <span class="value" id="nc0Label"></span>
+          </label>
+          <input id="nc0" type="range" min="30" max="50" step="1" value="40" />
+        </div>
+        <div class="field">
+          <label>
+            Rentner N_R,0 (Mio)
+            <span class="value" id="nr0Label"></span>
+          </label>
+          <input id="nr0" type="range" min="15" max="30" step="1" value="21" />
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="field">
+          <label>
+            Wachstumsrate g_C (% p.a.)
+            <span class="value" id="gcLabel"></span>
+          </label>
+          <input id="gc" type="range" min="-1.5" max="0.5" step="0.1" value="-0.2" />
+        </div>
+        <div class="field">
+          <label>
+            Wachstumsrate g_R (% p.a.)
+            <span class="value" id="grLabel"></span>
+          </label>
+          <input id="gr" type="range" min="0" max="3" step="0.1" value="1.3" />
+        </div>
+        <div class="field">
+          <label>
+            Durchschnittslohn w (k EUR)
+            <span class="value" id="wLabel"></span>
+          </label>
+          <input id="w" type="range" min="40" max="70" step="1" value="50" />
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="field">
+          <label>
+            Horizont T (Jahre)
+            <span class="value" id="horizonLabel"></span>
+          </label>
+          <input id="horizon" type="range" min="5" max="30" step="1" value="15" />
+        </div>
+        <div class="field">
+          <label>
+            Aktivrente gamma (%)
+            <span class="value" id="gammaLabel"></span>
+          </label>
+          <input id="gamma" type="range" min="0" max="20" step="1" value="3" />
+        </div>
+      </div>
+
+      <div class="outputs">
+        <div class="metric" id="qCurrentMetric">
+          <div class="metric-label">q_0 = N_R,0 / N_C,0</div>
+          <div class="metric-value" id="q0Out"></div>
+        </div>
+        <div class="metric" id="qEndMetric">
+          <div class="metric-label">q_T (Ende Horizont)</div>
+          <div class="metric-value" id="qTOut"></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Delta q über T Jahre</div>
+          <div class="metric-value" id="deltaQOut"></div>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <strong>Interpretation:</strong> Der Abhängigkeitsquotient q(t) quantifiziert den demografischen Druck
+        auf das Umlagesystem. Die Wachstumsraten g_C und g_R bestimmen die Geschwindigkeit der Verschiebung.
+        Aktivrente gamma kann den Effekt über zusätzliche Beitragskapazität der Rentner abmildern.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Parteipräferenzen (21. Bundestag, Februar 2025)</h2>
+      <div class="subtitle" style="margin-bottom: 8px;">
+        Jede Partei hat eine Nutzenfunktion U(tau, rho, f, M_mig) mit idealen Werten
+        und Gewichtungen. Sitzverteilung entspricht der Bundestagswahl 2025 (630 Sitze).
+      </div>
+
+      <div class="party-grid" id="partyGrid"></div>
+
+      <div class="info-box">
+        <strong>Modellierung:</strong> Utility = -Summe w_i * (x_i - x_i,ideal)^2.
+        Parteien mit höheren Gewichtungen bei bestimmten Parametern zeigen geringere Kompromissbereitschaft.
+        Die Sitzverteilung bestimmt Koalitionsmöglichkeiten (Mehrheit: 316 Sitze).
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Haltelinien-Constraints und Policy Space</h2>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>
+            Max. Beitragssatz tau_max (%)
+            <span class="value" id="tauMaxLabel"></span>
+          </label>
+          <input id="tauMax" type="range" min="18" max="24" step="0.5" value="20" />
+        </div>
+        <div class="field">
+          <label>
+            Min. Rentenniveau rho_min (%)
+            <span class="value" id="rhoMinLabel"></span>
+          </label>
+          <input id="rhoMin" type="range" min="40" max="52" step="1" value="48" />
+        </div>
+      </div>
+
+      <div class="info-box">
+        <strong>Zentrale Forschungsfrage:</strong> Gegeben demografischer Druck q(t), welche
+        Kombinationen von (rho, f, M_mig) halten tau kleiner gleich tau_max ein?
+        Die Identität tau = q * rho * (1-f) / (1 + gamma * q) bestimmt die Machbarkeit.
+      </div>
+
+      <canvas id="policySpaceCanvas"></canvas>
+      <div class="legend">
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: rgba(52,211,153,0.7);"></span>
+          Machbar (tau &lt; tau_max)
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: rgba(250,204,21,0.7);"></span>
+          Grenzwertig
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: rgba(239,68,68,0.7);"></span>
+          Unmöglich (tau &gt; tau_max)
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Erwerbsmigration als Politischer Stellhebel</h2>
+
+      <div class="field">
+        <label>
+          Erwerbsmigration M_mig (Mio. Personen/Jahr)
+          <span class="value" id="mmigLabel"></span>
+        </label>
+        <input id="mmig" type="range" min="0" max="1.0" step="0.05" value="0.3" />
+      </div>
+
+      <div class="outputs">
+        <div class="metric">
+          <div class="metric-label">N_C bei t=T (mit M_mig)</div>
+          <div class="metric-value" id="ncTWithMigOut"></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">N_C bei t=T (ohne M_mig)</div>
+          <div class="metric-value" id="ncTNoMigOut"></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Delta durch Migration</div>
+          <div class="metric-value" id="migImpactOut"></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Erforderl. M_mig für tau=tau_max</div>
+          <div class="metric-value" id="requiredMigOut"></div>
+        </div>
+      </div>
+
+      <div class="warning-box" id="migrationWarning" style="display:none;">
+        <strong>Warnung:</strong> Die erforderliche Erwerbsmigration übersteigt
+        historische oder politisch realistische Werte. Ohne zusätzliche Reformmaßnahmen
+        (höheres f, niedrigeres rho, höheres gamma) ist die Haltelinie nicht haltbar.
+      </div>
+
+      <canvas id="migrationCanvas"></canvas>
+      <div class="legend">
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: rgba(56,189,248,0.8);"></span>
+          tau_erf(t) mit akt. M_mig
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: rgba(239,68,68,0.8);"></span>
+          tau_erf(t) ohne M_mig
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: rgba(148,163,184,0.5); border: 2px dashed #fff;"></span>
+          tau_max Haltelinie
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Koalitionsbildung und Verhandlung</h2>
+      <div class="subtitle" style="margin-bottom: 8px;">
+        Basierend auf Parteipräferenzen und Mehrheitserfordernissen werden mögliche Koalitionen
+        simuliert. Jede Koalition verhandelt einen Kompromiss im Policy-Raum (gewichteter
+        Mittelwert nach Sitzanteil). Machbarkeit wird gegen demografische Constraints validiert.
+      </div>
+
+      <div class="btn-group">
+        <button class="btn" id="analyzeCoalitionsBtn">Koalitionen analysieren</button>
+        <button class="btn" id="runTimeSeriesBtn">Zeitreihe simulieren</button>
+      </div>
+
+      <div id="coalitionResults" style="margin-top: 12px;"></div>
+
+      <div class="info-box" id="coalitionInfo" style="display:none; margin-top:12px;"></div>
+    </section>
+
+    <section class="card" id="timeSeriesSection" style="display:none;">
+      <h2>Zeitreihenanalyse: Kollaps des Policy Space</h2>
+      <div class="subtitle" style="margin-bottom: 8px;">
+        Jahr für Jahr: Welche Koalitionen bleiben tragfähig wenn q(t) steigt?
+        Wann kollabiert der politisch machbare Raum (keine Koalition kann beide Haltelinien halten)?
+      </div>
+
+      <div class="table-responsive">
+        <table id="timeSeriesTable">
+          <thead>
+            <tr>
+              <th>Jahr</th>
+              <th>q(t)</th>
+              <th>tau_erf Ampel</th>
+              <th>tau_erf GroKo</th>
+              <th>Tragfähige</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="timeSeriesBody"></tbody>
+        </table>
+      </div>
+
+      <canvas id="timeSeriesCanvas"></canvas>
+      <div class="legend">
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: rgba(52,211,153,0.7);"></span>
+          Anzahl tragfähiger Koalitionen
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch" style="background: rgba(56,189,248,0.7);"></span>
+          q(t) (rechte Achse)
+        </div>
+      </div>
+
+      <div class="warning-box" id="collapseWarning" style="display:none; margin-top:12px;"></div>
+    </section>
+
+    <section class="card">
+      <h2>Modellbeschreibung</h2>
+
+      <h3>Kernformeln</h3>
+      <div class="info-box">
+        <strong>Demografische Dynamik:</strong><br/>
+        N_C(t+1) = N_C(t) * (1 + g_C) + M_mig<br/>
+        N_R(t+1) = N_R(t) * (1 + g_R)<br/>
+        q(t) = N_R(t) / N_C(t)
+      </div>
+
+      <div class="info-box">
+        <strong>Erforderlicher Beitragssatz:</strong><br/>
+        tau_erf = q * rho * (1-f) / (1 + gamma * q)<br/>
+        mit Haltelinie-Constraint: tau_erf kleiner gleich tau_max
+      </div>
+
+      <div class="info-box">
+        <strong>Parteien-Utility:</strong><br/>
+        U = -w_tau * (tau - tau_ideal)^2
+            -w_rho * (rho - rho_ideal)^2
+            -w_f * (f - f_ideal)^2
+            -w_M * (M - M_ideal)^2
+      </div>
+
+      <h3>Parteipräferenzen (Modellannahmen)</h3>
+      <div class="subtitle" style="line-height:1.6;">
+        <strong>SPD:</strong> tau ca 18-19%, rho=48-50%, f ca 35%, M ca 0.4 (soziale Sicherung, moderat pro-Migration)<br/>
+        <strong>CDU/CSU:</strong> tau ca 18-20%, rho=46-48%, f ca 25%, M ca 0.25 (konservativ-pragmatisch)<br/>
+        <strong>Grüne:</strong> tau ca 19%, rho=50%, f ca 40%, M ca 0.5 (sozial-ökologisch, pro-Migration)<br/>
+        <strong>AfD:</strong> tau ca 19%, rho=52%, f ca 30%, M ca 0.05 (national-sozial, anti-Migration)<br/>
+        <strong>Linke:</strong> tau ca 20%, rho=52%, f ca 50%, M ca 0.4 (umverteilungsorientiert)
+      </div>
+
+      <h3>Interpretation und Limitationen</h3>
+      <div class="subtitle" style="line-height:1.6;">
+        Dieses Modell ist eine didaktische Vereinfachung der realen politischen
+        Dynamik. Es abstrahiert von Wahlkampftaktik, öffentlicher Meinung, EU-Constraints,
+        Generationenkapital, privater Vorsorge, regionalen Unterschieden.
+        <br/><br/>
+        Die Stärke liegt in der Strukturanalyse: Welche Trade-offs sind
+        unvermeidlich? Wann wird der Raum politisch machbarer Kompromisse zu eng?
+        Wie wirkt Migration als demografischer Puffer versus politische Konfliktlinie?
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // Configuration and Agents (21. Bundestag 2025)
+    const PARTIES = [
+      {
+        name: "CDU/CSU",
+        seats: 208,
+        color: "#000000",
+        preferences: { tau: 19, rho: 47, f: 25, mmig: 0.25 },
+        weights: { tau: 1.2, rho: 1.0, f: 1.0, mmig: 1.2 }
+      },
+      {
+        name: "AfD",
+        seats: 152,
+        color: "#009EE0",
+        preferences: { tau: 19, rho: 52, f: 30, mmig: 0.05 },
+        weights: { tau: 1.0, rho: 1.3, f: 0.9, mmig: 2.0 }
+      },
+      {
+        name: "SPD",
+        seats: 120,
+        color: "#E3000F",
+        preferences: { tau: 18.5, rho: 49, f: 35, mmig: 0.4 },
+        weights: { tau: 1.0, rho: 1.5, f: 1.0, mmig: 0.8 }
+      },
+      {
+        name: "Grüne",
+        seats: 85,
+        color: "#64A12D",
+        preferences: { tau: 19, rho: 50, f: 40, mmig: 0.5 },
+        weights: { tau: 0.8, rho: 1.2, f: 1.0, mmig: 0.6 }
+      },
+      {
+        name: "Linke",
+        seats: 64,
+        color: "#BE3075",
+        preferences: { tau: 20, rho: 52, f: 50, mmig: 0.4 },
+        weights: { tau: 0.9, rho: 1.4, f: 1.2, mmig: 0.7 }
+      }
+    ];
+
+    const TOTAL_SEATS = 630;
+    const MAJORITY = 316;
+
+    // DOM Elements
+    const startYearInput = document.getElementById("startYear");
+    const nc0Input = document.getElementById("nc0");
+    const nr0Input = document.getElementById("nr0");
+    const gcInput = document.getElementById("gc");
+    const grInput = document.getElementById("gr");
+    const wInput = document.getElementById("w");
+    const horizonInput = document.getElementById("horizon");
+    const gammaInput = document.getElementById("gamma");
+    const tauMaxInput = document.getElementById("tauMax");
+    const rhoMinInput = document.getElementById("rhoMin");
+    const mmigInput = document.getElementById("mmig");
+
+    const startYearLabel = document.getElementById("startYearLabel");
+    const nc0Label = document.getElementById("nc0Label");
+    const nr0Label = document.getElementById("nr0Label");
+    const gcLabel = document.getElementById("gcLabel");
+    const grLabel = document.getElementById("grLabel");
+    const wLabel = document.getElementById("wLabel");
+    const horizonLabel = document.getElementById("horizonLabel");
+    const gammaLabel = document.getElementById("gammaLabel");
+    const tauMaxLabel = document.getElementById("tauMaxLabel");
+    const rhoMinLabel = document.getElementById("rhoMinLabel");
+    const mmigLabel = document.getElementById("mmigLabel");
+
+    const q0Out = document.getElementById("q0Out");
+    const qTOut = document.getElementById("qTOut");
+    const deltaQOut = document.getElementById("deltaQOut");
+    const ncTWithMigOut = document.getElementById("ncTWithMigOut");
+    const ncTNoMigOut = document.getElementById("ncTNoMigOut");
+    const migImpactOut = document.getElementById("migImpactOut");
+    const requiredMigOut = document.getElementById("requiredMigOut");
+
+    const partyGrid = document.getElementById("partyGrid");
+    const policySpaceCanvas = document.getElementById("policySpaceCanvas");
+    const migrationCanvas = document.getElementById("migrationCanvas");
+    const timeSeriesCanvas = document.getElementById("timeSeriesCanvas");
+
+    const analyzeCoalitionsBtn = document.getElementById("analyzeCoalitionsBtn");
+    const runTimeSeriesBtn = document.getElementById("runTimeSeriesBtn");
+    const coalitionResults = document.getElementById("coalitionResults");
+    const coalitionInfo = document.getElementById("coalitionInfo");
+    const timeSeriesSection = document.getElementById("timeSeriesSection");
+    const timeSeriesBody = document.getElementById("timeSeriesBody");
+    const migrationWarning = document.getElementById("migrationWarning");
+    const collapseWarning = document.getElementById("collapseWarning");
+
+    const q0Metric = document.getElementById("qCurrentMetric");
+    const qTMetric = document.getElementById("qEndMetric");
+
+    // Utility Functions
+    function fmt(val, decimals = 2) {
+      return isFinite(val) ? val.toFixed(decimals) : "–";
+    }
+
+    function calculateQ(nc, nr) {
+      return nr / nc;
+    }
+
+    function calculateTauErf(q, rho, f, gamma) {
+      return (q * rho * (1 - f)) / (1 + gamma * q);
+    }
+
+    function projectDemography(nc0, nr0, gc, gr, mmig, T) {
+      const trajectory = [];
+      let nc = nc0;
+      let nr = nr0;
+
+      for (let t = 0; t <= T; t++) {
+        trajectory.push({ t, nc, nr, q: nr / nc });
+        nc = nc * (1 + gc) + mmig;
+        nr = nr * (1 + gr);
+      }
+
+      return trajectory;
+    }
+
+    function negotiateCoalitionPolicy(coalition) {
+      const totalSeats = coalition.reduce((sum, p) => sum + p.seats, 0);
+
+      let tau = 0, rho = 0, f = 0, mmig = 0;
+
+      coalition.forEach(party => {
+        const weight = party.seats / totalSeats;
+        tau += party.preferences.tau * weight;
+        rho += party.preferences.rho * weight;
+        f += party.preferences.f * weight;
+        mmig += party.preferences.mmig * weight;
+      });
+
+      return { tau, rho, f, mmig };
+    }
+
+    function isCoalitionViable(policy, q, tauMax, rhoMin, gamma) {
+      const { rho, f } = policy;
+
+      if (rho < rhoMin) return { viable: false, reason: "rho < rho_min" };
+
+      const tauErf = calculateTauErf(q, rho / 100, f / 100, gamma / 100) * 100;
+
+      if (tauErf > tauMax) {
+        return { viable: false, reason: `tau_erf = ${fmt(tauErf, 1)}% > tau_max`, tauErf };
+      }
+
+      return { viable: true, reason: "Tragfähig", tauErf };
+    }
+
+    function calculateRequiredMmig(nc0, nr0, gc, gr, T, rho, f, gamma, tauMax) {
+      let low = 0;
+      let high = 2.0;
+      const tolerance = 0.01;
+
+      for (let iter = 0; iter < 30; iter++) {
+        const mid = (low + high) / 2;
+        const traj = projectDemography(nc0, nr0, gc / 100, gr / 100, mid, T);
+        const qT = traj[T].q;
+        const tauErf = calculateTauErf(qT, rho / 100, f / 100, gamma / 100) * 100;
+
+        if (Math.abs(tauErf - tauMax) < tolerance) {
+          return mid;
+        }
+
+        if (tauErf > tauMax) {
+          low = mid;
+        } else {
+          high = mid;
+        }
+      }
+
+      return (low + high) / 2;
+    }
+
+    // Visualization Functions
+    function drawPolicySpace() {
+      const canvas = policySpaceCanvas;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const width = rect.width;
+      const height = rect.height;
+      ctx.clearRect(0, 0, width, height);
+
+      const padding = { left: 60, right: 20, top: 30, bottom: 50 };
+      const plotW = width - padding.left - padding.right;
+      const plotH = height - padding.top - padding.bottom;
+
+      if (plotW <= 0 || plotH <= 0) return;
+
+      const nc0 = Number(nc0Input.value);
+      const nr0 = Number(nr0Input.value);
+      const q = calculateQ(nc0, nr0);
+      const tauMax = Number(tauMaxInput.value);
+      const rhoMin = Number(rhoMinInput.value);
+      const gamma = Number(gammaInput.value);
+
+      const fMin = 15, fMax = 55;
+      const rhoMinPlot = 42, rhoMaxPlot = 54;
+      const nx = 80, ny = 80;
+
+      for (let iy = 0; iy < ny; iy++) {
+        const rho = rhoMinPlot + (iy / ny) * (rhoMaxPlot - rhoMinPlot);
+        for (let ix = 0; ix < nx; ix++) {
+          const f = fMin + (ix / nx) * (fMax - fMin);
+
+          const tauErf = calculateTauErf(q, rho / 100, f / 100, gamma / 100) * 100;
+
+          const x = padding.left + (ix / nx) * plotW;
+          const y = padding.top + plotH - (iy / ny) * plotH;
+          const cellW = plotW / nx;
+          const cellH = plotH / ny;
+
+          let color;
+          if (rho < rhoMin) {
+            color = "rgba(100, 100, 100, 0.3)";
+          } else if (tauErf <= tauMax) {
+            color = "rgba(52, 211, 153, 0.7)";
+          } else if (tauErf <= tauMax + 2) {
+            color = "rgba(250, 204, 21, 0.7)";
+          } else {
+            color = "rgba(239, 68, 68, 0.7)";
+          }
+
+          ctx.fillStyle = color;
+          ctx.fillRect(x, y, cellW, cellH);
+        }
+      }
+
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.8)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, padding.top);
+      ctx.lineTo(padding.left, padding.top + plotH);
+      ctx.lineTo(padding.left + plotW, padding.top + plotH);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+      ctx.font = "11px system-ui";
+      ctx.textAlign = "center";
+
+      for (let i = 0; i <= 4; i++) {
+        const f = fMin + (i / 4) * (fMax - fMin);
+        const x = padding.left + (i / 4) * plotW;
+        ctx.fillText(f.toFixed(0) + "%", x, padding.top + plotH + 20);
+      }
+      ctx.fillText("Steueranteil f (%)", padding.left + plotW / 2, padding.top + plotH + 40);
+
+      ctx.textAlign = "right";
+      for (let i = 0; i <= 4; i++) {
+        const rho = rhoMinPlot + (i / 4) * (rhoMaxPlot - rhoMinPlot);
+        const y = padding.top + plotH - (i / 4) * plotH;
+        ctx.fillText(rho.toFixed(0) + "%", padding.left - 10, y + 4);
+      }
+      ctx.save();
+      ctx.translate(padding.left - 45, padding.top + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = "center";
+      ctx.fillText("Rentenniveau rho (%)", 0, 0);
+      ctx.restore();
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 3]);
+
+      const yRhoMin = padding.top + plotH - ((rhoMin - rhoMinPlot) / (rhoMaxPlot - rhoMinPlot)) * plotH;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, yRhoMin);
+      ctx.lineTo(padding.left + plotW, yRhoMin);
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+    }
+
+    function drawMigrationImpact() {
+      const canvas = migrationCanvas;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const width = rect.width;
+      const height = rect.height;
+      ctx.clearRect(0, 0, width, height);
+
+      const padding = { left: 60, right: 20, top: 30, bottom: 50 };
+      const plotW = width - padding.left - padding.right;
+      const plotH = height - padding.top - padding.bottom;
+
+      if (plotW <= 0 || plotH <= 0) return;
+
+      const nc0 = Number(nc0Input.value);
+      const nr0 = Number(nr0Input.value);
+      const gc = Number(gcInput.value);
+      const gr = Number(grInput.value);
+      const mmig = Number(mmigInput.value);
+      const T = Number(horizonInput.value);
+      const rhoMin = Number(rhoMinInput.value);
+      const tauMax = Number(tauMaxInput.value);
+      const gamma = Number(gammaInput.value);
+
+      const trajWithMig = projectDemography(nc0, nr0, gc / 100, gr / 100, mmig, T);
+      const trajNoMig = projectDemography(nc0, nr0, gc / 100, gr / 100, 0, T);
+
+      const tauWithMig = trajWithMig.map(p =>
+        calculateTauErf(p.q, rhoMin / 100, 0.3, gamma / 100) * 100
+      );
+      const tauNoMig = trajNoMig.map(p =>
+        calculateTauErf(p.q, rhoMin / 100, 0.3, gamma / 100) * 100
+      );
+
+      const allTau = [...tauWithMig, ...tauNoMig];
+      const minTau = Math.min(...allTau);
+      const maxTau = Math.max(...allTau, tauMax + 2);
+
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.8)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, padding.top);
+      ctx.lineTo(padding.left, padding.top + plotH);
+      ctx.lineTo(padding.left + plotW, padding.top + plotH);
+      ctx.stroke();
+
+      const xOf = (t) => padding.left + (T === 0 ? 0 : (t / T) * plotW);
+      const yOf = (tau) => padding.top + plotH - ((tau - minTau) / (maxTau - minTau)) * plotH;
+
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.5)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 4]);
+      const yMax = yOf(tauMax);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, yMax);
+      ctx.lineTo(padding.left + plotW, yMax);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      function drawSeries(series, color, lineWidth) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        series.forEach((tau, t) => {
+          const x = xOf(t);
+          const y = yOf(tau);
+          if (t === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      drawSeries(tauNoMig, "rgba(239, 68, 68, 0.8)", 2);
+      drawSeries(tauWithMig, "rgba(56, 189, 248, 0.8)", 2.5);
+
+      ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+      ctx.font = "11px system-ui";
+      ctx.textAlign = "center";
+
+      for (let i = 0; i <= 5; i++) {
+        const t = (i / 5) * T;
+        const x = xOf(t);
+        ctx.fillText(t.toFixed(0), x, padding.top + plotH + 20);
+      }
+      ctx.fillText("Jahre", padding.left + plotW / 2, padding.top + plotH + 40);
+
+      ctx.textAlign = "right";
+      for (let i = 0; i <= 4; i++) {
+        const tau = minTau + (i / 4) * (maxTau - minTau);
+        const y = yOf(tau);
+        ctx.fillText(tau.toFixed(1) + "%", padding.left - 10, y + 4);
+      }
+      ctx.save();
+      ctx.translate(padding.left - 45, padding.top + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = "center";
+      ctx.fillText("tau_erf (%)", 0, 0);
+      ctx.restore();
+    }
+
+    function drawTimeSeries(timeSeriesData) {
+      const canvas = timeSeriesCanvas;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const width = rect.width;
+      const height = rect.height;
+      ctx.clearRect(0, 0, width, height);
+
+      const padding = { left: 60, right: 60, top: 30, bottom: 50 };
+      const plotW = width - padding.left - padding.right;
+      const plotH = height - padding.top - padding.bottom;
+
+      if (plotW <= 0 || plotH <= 0) return;
+
+      const years = timeSeriesData.map(d => d.year);
+      const viableCounts = timeSeriesData.map(d => d.viableCount);
+      const qValues = timeSeriesData.map(d => d.q);
+
+      const maxCount = Math.max(...viableCounts, 10);
+      const minQ = Math.min(...qValues);
+      const maxQ = Math.max(...qValues);
+
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.8)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, padding.top);
+      ctx.lineTo(padding.left, padding.top + plotH);
+      ctx.lineTo(padding.left + plotW, padding.top + plotH);
+      ctx.stroke();
+
+      const xOf = (idx) => padding.left + (idx / (years.length - 1)) * plotW;
+      const yOfCount = (count) => padding.top + plotH - (count / maxCount) * plotH;
+      const yOfQ = (q) => padding.top + plotH - ((q - minQ) / (maxQ - minQ)) * plotH;
+
+      ctx.fillStyle = "rgba(52, 211, 153, 0.7)";
+      viableCounts.forEach((count, idx) => {
+        const x = xOf(idx);
+        const y = yOfCount(count);
+        const barWidth = plotW / years.length * 0.6;
+        ctx.fillRect(x - barWidth / 2, y, barWidth, padding.top + plotH - y);
+      });
+
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      qValues.forEach((q, idx) => {
+        const x = xOf(idx);
+        const y = yOfQ(q);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(148, 163, 184, 0.9)";
+      ctx.font = "10px system-ui";
+      ctx.textAlign = "center";
+
+      years.forEach((year, idx) => {
+        if (idx % 2 === 0 || years.length <= 10) {
+          const x = xOf(idx);
+          ctx.fillText(year, x, padding.top + plotH + 20);
+        }
+      });
+      ctx.fillText("Jahr", padding.left + plotW / 2, padding.top + plotH + 40);
+
+      ctx.textAlign = "right";
+      for (let i = 0; i <= 4; i++) {
+        const count = (i / 4) * maxCount;
+        const y = yOfCount(count);
+        ctx.fillText(count.toFixed(0), padding.left - 10, y + 4);
+      }
+      ctx.save();
+      ctx.translate(padding.left - 45, padding.top + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = "center";
+      ctx.fillText("Anzahl tragfähig", 0, 0);
+      ctx.restore();
+
+      ctx.textAlign = "left";
+      for (let i = 0; i <= 4; i++) {
+        const q = minQ + (i / 4) * (maxQ - minQ);
+        const y = yOfQ(q);
+        ctx.fillText(q.toFixed(3), padding.left + plotW + 10, y + 4);
+      }
+      ctx.save();
+      ctx.translate(padding.left + plotW + 45, padding.top + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = "center";
+      ctx.fillText("q(t)", 0, 0);
+      ctx.restore();
+    }
+
+    // UI Update Functions
+    function updateLabels() {
+      startYearLabel.textContent = startYearInput.value;
+      nc0Label.textContent = nc0Input.value;
+      nr0Label.textContent = nr0Input.value;
+      gcLabel.textContent = gcInput.value;
+      grLabel.textContent = grInput.value;
+      wLabel.textContent = wInput.value;
+      horizonLabel.textContent = horizonInput.value;
+      gammaLabel.textContent = gammaInput.value;
+      tauMaxLabel.textContent = tauMaxInput.value;
+      rhoMinLabel.textContent = rhoMinInput.value;
+      mmigLabel.textContent = mmigInput.value;
+    }
+
+    function updateDemographics() {
+      const nc0 = Number(nc0Input.value);
+      const nr0 = Number(nr0Input.value);
+      const gc = Number(gcInput.value);
+      const gr = Number(grInput.value);
+      const mmig = Number(mmigInput.value);
+      const T = Number(horizonInput.value);
+
+      const q0 = calculateQ(nc0, nr0);
+
+      const trajWithMig = projectDemography(nc0, nr0, gc / 100, gr / 100, mmig, T);
+      const trajNoMig = projectDemography(nc0, nr0, gc / 100, gr / 100, 0, T);
+
+      const qT = trajWithMig[T].q;
+      const ncTWithMig = trajWithMig[T].nc;
+      const ncTNoMig = trajNoMig[T].nc;
+
+      q0Out.textContent = fmt(q0, 3);
+      qTOut.textContent = fmt(qT, 3);
+      deltaQOut.textContent = fmt(qT - q0, 3);
+
+      ncTWithMigOut.textContent = fmt(ncTWithMig, 1) + " Mio";
+      ncTNoMigOut.textContent = fmt(ncTNoMig, 1) + " Mio";
+      migImpactOut.textContent = "+" + fmt(ncTWithMig - ncTNoMig, 1) + " Mio";
+
+      q0Metric.className = "metric";
+      qTMetric.className = "metric";
+
+      if (qT > 0.6) {
+        qTMetric.classList.add("alert");
+      } else if (qT > 0.55) {
+        qTMetric.classList.add("warning");
+      } else {
+        qTMetric.classList.add("good");
+      }
+
+      const rhoMin = Number(rhoMinInput.value);
+      const tauMax = Number(tauMaxInput.value);
+      const gamma = Number(gammaInput.value);
+
+      const requiredMmig = calculateRequiredMmig(nc0, nr0, gc, gr, T, rhoMin, 30, gamma, tauMax);
+      requiredMigOut.textContent = fmt(requiredMmig, 2) + " Mio/a";
+
+      if (requiredMmig > 0.8) {
+        migrationWarning.style.display = "block";
+      } else {
+        migrationWarning.style.display = "none";
+      }
+    }
+
+    function updatePartyDisplay() {
+      partyGrid.innerHTML = "";
+
+      PARTIES.forEach(party => {
+        const card = document.createElement("div");
+        card.className = `party-card ${party.name.toLowerCase().replace(/\//g, '')}`;
+
+        const seatPct = ((party.seats / TOTAL_SEATS) * 100).toFixed(1);
+
+        card.innerHTML = `
+          <div class="party-name" style="color: ${party.color}">${party.name}</div>
+          <div class="party-seats">${party.seats} Sitze (${seatPct}%)</div>
+          <div class="party-pref">tau: ${party.preferences.tau}%</div>
+          <div class="party-pref">rho: ${party.preferences.rho}%</div>
+          <div class="party-pref">f: ${party.preferences.f}%</div>
+          <div class="party-pref">M: ${party.preferences.mmig} Mio/a</div>
+        `;
+
+        partyGrid.appendChild(card);
+      });
+    }
+
+    function analyzeCoalitions() {
+      const nc0 = Number(nc0Input.value);
+      const nr0 = Number(nr0Input.value);
+      const q = calculateQ(nc0, nr0);
+      const tauMax = Number(tauMaxInput.value);
+      const rhoMin = Number(rhoMinInput.value);
+      const gamma = Number(gammaInput.value);
+
+      const viableParties = PARTIES.filter(p => p.name !== "AfD");
+      const coalitions = [];
+
+      for (let i = 0; i < viableParties.length; i++) {
+        for (let j = i + 1; j < viableParties.length; j++) {
+          coalitions.push([viableParties[i], viableParties[j]]);
+        }
+      }
+
+      for (let i = 0; i < viableParties.length; i++) {
+        for (let j = i + 1; j < viableParties.length; j++) {
+          for (let k = j + 1; k < viableParties.length; k++) {
+            coalitions.push([viableParties[i], viableParties[j], viableParties[k]]);
+          }
+        }
+      }
+
+      const results = coalitions.map(coalition => {
+        const totalSeats = coalition.reduce((sum, p) => sum + p.seats, 0);
+        const hasMajority = totalSeats >= MAJORITY;
+
+        if (!hasMajority) return null;
+
+        const policy = negotiateCoalitionPolicy(coalition);
+        const feasibility = isCoalitionViable(policy, q, tauMax, rhoMin, gamma);
+
+        return {
+          coalition,
+          totalSeats,
+          policy,
+          feasibility
+        };
+      }).filter(r => r !== null);
+
+      results.sort((a, b) => {
+        if (a.feasibility.viable && !b.feasibility.viable) return -1;
+        if (!a.feasibility.viable && b.feasibility.viable) return 1;
+        if (a.feasibility.viable && b.feasibility.viable) {
+          return a.feasibility.tauErf - b.feasibility.tauErf;
+        }
+        return (b.feasibility.tauErf || 999) - (a.feasibility.tauErf || 999);
+      });
+
+      coalitionResults.innerHTML = "";
+
+      const viableCount = results.filter(r => r.feasibility.viable).length;
+      const criticalCount = results.filter(r =>
+        !r.feasibility.viable && r.feasibility.tauErf && r.feasibility.tauErf <= tauMax + 3
+      ).length;
+
+      coalitionInfo.style.display = "block";
+      coalitionInfo.innerHTML = `
+        <strong>Analyse:</strong> Von ${results.length} möglichen Koalitionen mit Mehrheit sind
+        <strong>${viableCount}</strong> unter den aktuellen Haltelinien tragfähig,
+        <strong>${criticalCount}</strong> im kritischen Bereich (tau bis +3% über Limit).
+      `;
+
+      const gridDiv = document.createElement("div");
+      gridDiv.className = "coalition-grid";
+
+      results.slice(0, 12).forEach(result => {
+        const card = document.createElement("div");
+        const names = result.coalition.map(p => p.name).join(" + ");
+        const seatPct = ((result.totalSeats / TOTAL_SEATS) * 100).toFixed(1);
+
+        let className = "coalition-card";
+        if (result.feasibility.viable) {
+          className += " viable";
+        } else if (result.feasibility.tauErf && result.feasibility.tauErf <= tauMax + 3) {
+          className += " critical";
+        } else {
+          className += " impossible";
+        }
+
+        card.className = className;
+
+        card.innerHTML = `
+          <div class="coalition-name">${names}</div>
+          <div class="coalition-seats">${result.totalSeats} Sitze (${seatPct}%)</div>
+          <div class="coalition-policy">tau: ${fmt(result.policy.tau, 1)}%</div>
+          <div class="coalition-policy">rho: ${fmt(result.policy.rho, 1)}%</div>
+          <div class="coalition-policy">f: ${fmt(result.policy.f, 1)}%</div>
+          <div class="coalition-policy">M: ${fmt(result.policy.mmig, 2)} Mio/a</div>
+          <div class="coalition-feasibility">${result.feasibility.reason}</div>
+        `;
+
+        gridDiv.appendChild(card);
+      });
+
+      coalitionResults.appendChild(gridDiv);
+    }
+
+    function runTimeSeries() {
+      const startYear = Number(startYearInput.value);
+      const nc0 = Number(nc0Input.value);
+      const nr0 = Number(nr0Input.value);
+      const gc = Number(gcInput.value);
+      const gr = Number(grInput.value);
+      const mmig = Number(mmigInput.value);
+      const T = Number(horizonInput.value);
+      const tauMax = Number(tauMaxInput.value);
+      const rhoMin = Number(rhoMinInput.value);
+      const gamma = Number(gammaInput.value);
+
+      const trajectory = projectDemography(nc0, nr0, gc / 100, gr / 100, mmig, T);
+
+      const ampel = ["SPD", "Grüne"];
+      const grosseKoalition = ["SPD", "CDU/CSU"];
+
+      const timeSeriesData = [];
+
+      trajectory.forEach((point, idx) => {
+        if (idx === 0 || idx === T || idx % 2 === 0) {
+          const year = startYear + idx;
+          const q = point.q;
+
+          const viableParties = PARTIES.filter(p => p.name !== "AfD");
+          let viableCount = 0;
+
+          for (let i = 0; i < viableParties.length; i++) {
+            for (let j = i + 1; j < viableParties.length; j++) {
+              const coalition = [viableParties[i], viableParties[j]];
+              const totalSeats = coalition.reduce((sum, p) => sum + p.seats, 0);
+
+              if (totalSeats >= MAJORITY) {
+                const policy = negotiateCoalitionPolicy(coalition);
+                const feasibility = isCoalitionViable(policy, q, tauMax, rhoMin, gamma);
+                if (feasibility.viable) viableCount++;
+              }
+
+              for (let k = j + 1; k < viableParties.length; k++) {
+                const coalition3 = [viableParties[i], viableParties[j], viableParties[k]];
+                const totalSeats3 = coalition3.reduce((sum, p) => sum + p.seats, 0);
+
+                if (totalSeats3 >= MAJORITY) {
+                  const policy3 = negotiateCoalitionPolicy(coalition3);
+                  const feasibility3 = isCoalitionViable(policy3, q, tauMax, rhoMin, gamma);
+                  if (feasibility3.viable) viableCount++;
+                }
+              }
+            }
+          }
+
+          const ampelParties = PARTIES.filter(p => ampel.includes(p.name));
+          const gkParties = PARTIES.filter(p => grosseKoalition.includes(p.name));
+
+          const ampelPolicy = negotiateCoalitionPolicy(ampelParties);
+          const gkPolicy = negotiateCoalitionPolicy(gkParties);
+
+          const ampelTau = calculateTauErf(q, ampelPolicy.rho / 100, ampelPolicy.f / 100, gamma / 100) * 100;
+          const gkTau = calculateTauErf(q, gkPolicy.rho / 100, gkPolicy.f / 100, gamma / 100) * 100;
+
+          let status = "Stabil";
+          if (viableCount === 0) status = "Kollaps";
+          else if (viableCount <= 2) status = "Kritisch";
+          else if (viableCount <= 5) status = "Angespannt";
+
+          timeSeriesData.push({
+            year,
+            q: q,
+            viableCount,
+            ampelTau,
+            gkTau,
+            status
+          });
+        }
+      });
+
+      timeSeriesBody.innerHTML = "";
+      timeSeriesData.forEach(data => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td class="year-column">${data.year}</td>
+          <td>${fmt(data.q, 3)}</td>
+          <td>${fmt(data.ampelTau, 1)}%</td>
+          <td>${fmt(data.gkTau, 1)}%</td>
+          <td>${data.viableCount}</td>
+          <td>${data.status}</td>
+        `;
+        timeSeriesBody.appendChild(row);
+      });
+
+      const collapseYear = timeSeriesData.find(d => d.viableCount === 0);
+      if (collapseYear) {
+        collapseWarning.style.display = "block";
+        collapseWarning.innerHTML = `
+          <strong>Policy Space Kollaps:</strong> Im Jahr <strong>${collapseYear.year}</strong>
+          (q = ${fmt(collapseYear.q, 3)}) gibt es keine politisch machbare Koalition mehr, die beide
+          Haltelinien einhalten kann. Ohne Anpassung von tau_max, rho_min oder
+          dramatische Erhöhung von M_mig bzw. gamma ist das System nicht mehr tragfähig.
+        `;
+      } else {
+        collapseWarning.style.display = "none";
+      }
+
+      drawTimeSeries(timeSeriesData);
+
+      timeSeriesSection.style.display = "block";
+      timeSeriesSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // Event Listeners
+    function updateAll() {
+      updateLabels();
+      updateDemographics();
+      drawPolicySpace();
+      drawMigrationImpact();
+    }
+
+    [nc0Input, nr0Input, gcInput, grInput, wInput, horizonInput, gammaInput,
+     tauMaxInput, rhoMinInput, mmigInput, startYearInput].forEach(input => {
+      input.addEventListener("input", updateAll);
+      input.addEventListener("change", updateAll);
+    });
+
+    analyzeCoalitionsBtn.addEventListener("click", analyzeCoalitions);
+    runTimeSeriesBtn.addEventListener("click", runTimeSeries);
+
+    // Initialization
+    updatePartyDisplay();
+    updateAll();
+
+    // Redraw canvases on window resize
+    let resizeTimeout;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        drawPolicySpace();
+        drawMigrationImpact();
+      }, 250);
+    });
+  </script>
+</body>
+</html>
