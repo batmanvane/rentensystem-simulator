@@ -352,7 +352,7 @@
     <header>
       <h1>Rentensystem-Simulator</h1>
       <div class="subtitle">
-        <strong>Einfaches Umlage-Modell</strong> mit Erweiterung um Aktivrente \(\gamma\) und private Vorsorge.
+        <strong>Einfaches Umlage-Modell</strong> mit Erweiterung um Aktivrente \(\gamma\) und privater Vorsorge.
       </div>
 	<div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
   \[
@@ -361,7 +361,7 @@
 	</div>
       <div class="subtitle">
         mit <span class="math-inline">\(q = \dfrac{N_R}{N_C}\)</span>.
-        Detaillierte Herleitung und das private Vorsorge-Modul siehe
+        Detaillierte Herleitung und das private Vorsorgemodell siehe
         <a href="#modell-details">Modellbeschreibung</a>.
       </div>
       <div class="subtitle">
@@ -369,7 +369,7 @@
         Rentnern zu Beitragszahlern, \(\rho_{\text{gesetz}}\) das gesetzliche Rentenniveau (durchschnittliche
         Rente in&nbsp;% des Lohns), \(f\) der Anteil der Rentenausgaben, der
         aus Steuern finanziert wird, und \(\gamma\) misst die beitragspflichtige Erwerbsintensität
-        der Rentner (Aktivrente). Eine zusätzliche private Rente wird über \(\rho_{\text{priv}}\) modelliert.
+        der Rentner (Aktivrente). Eine zusätzliche private Rente wird über \(\rho_{\text{privat}}\) modelliert.
       </div>
     </header>
 
@@ -554,7 +554,7 @@
           <div class="metric-value"><span id="rhoGesOut"></span> %</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Private Ersatzrate \(\rho_{\text{priv}}\)</div>
+          <div class="metric-label">Private Ersatzrate \(\rho_{\text{privat}}\)</div>
           <div class="metric-value"><span id="rhoPrivOut"></span> %</div>
         </div>
         <div class="metric">
@@ -562,7 +562,7 @@
           <div class="metric-value"><span id="rhoTotOut"></span> %</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Private Jahresrente \(P_{\text{priv}}\)</div>
+          <div class="metric-label">Private Jahresrente \(P_{\text{privat}}\)</div>
           <div class="metric-value"><span id="PprivOut"></span> k€</div>
         </div>
         <div class="metric">
@@ -580,7 +580,7 @@
         y-Achse: Steueranteil <span class="math-inline">\(f\)</span> (mehr Steuerfinanzierung nach oben).<br/>
         Der weiße Punkt markiert die aktuelle Konfiguration der Eingaben \((q, f)\).<br/>
         Iso-Linien zeigen Kombinationen aus \(q\), \(f\) und Aktivrente \(\gamma\), die zu ähnlichen
-        Beitragssätzen \(\tau\) führen. Die private Vorsorge \(\rho_{\text{priv}}\) wirkt auf einer
+        Beitragssätzen \(\tau\) führen. Die private Vorsorge \(\rho_{\text{privat}}\) wirkt auf einer
         zweiten Ebene: Sie verändert das gesamte Alterseinkommen, aber nicht direkt die Umlageformel.
       </div>
 
@@ -610,9 +610,9 @@
                 <span class="math-inline">\(q = \dfrac{N_R}{N_C}\)</span>
               </td></tr>
           <tr><td>\(\rho_{\text{gesetz}}\)</td><td>Gesetzliches Rentenniveau (Verhältnis durchschnittliche gesetzliche Rente / durchschnittlicher Lohn)</td></tr>
-          <tr><td>\(\rho_{\text{priv}}\)</td><td>Ersatzrate aus privater Vorsorge (Verhältnis zusätzliche private Jahresrente / durchschnittlicher Lohn)</td></tr>
+          <tr><td>\(\rho_{\text{privat}}\)</td><td>Ersatzrate aus privater Vorsorge (Verhältnis zusätzliche private Jahresrente / durchschnittlicher Lohn)</td></tr>
           <tr><td>\(\rho_{\text{gesamt}}\)</td><td>Gesamt-Ersatzrate im Alter,
-            <span class="math-inline">\(\rho_{\text{gesamt}} = \rho_{\text{gesetz}} + \rho_{\text{priv}}\)</span></td></tr>
+            <span class="math-inline">\(\rho_{\text{gesamt}} = \rho_{\text{gesetz}} + \rho_{\text{privat}}\)</span></td></tr>
           <tr><td>\(f\)</td><td>Steueranteil an den Rentenausgaben (z.&nbsp;B. Bundeszuschüsse)</td></tr>
           <tr><td>\(\gamma\)</td><td>Aktivrente-Parameter: beitragspflichtige Erwerbsintensität der Rentner (in Einheiten von Vollzeit; z.&nbsp;B. \(\gamma=0{,}1\) bedeutet effektiv 10&nbsp;% zusätzliche Vollzeitbeitragszahler je 100 Rentner)</td></tr>
           <tr><td>\(N_C\)</td><td>Anzahl der Beitragszahler (im Tool in Mio.)</td></tr>
@@ -627,7 +627,7 @@
           <tr><td>\(T_C\)</td><td>Dauer der Sparphase (Beitragsjahre)</td></tr>
           <tr><td>\(T_R\)</td><td>Dauer der Rentenphase (Rentenjahre)</td></tr>
           <tr><td>\(K\)</td><td>Privates Kapital bei Renteneintritt</td></tr>
-          <tr><td>\(P_{\text{priv}}\)</td><td>Jährliche private Rente (Annuität aus \(K\))</td></tr>
+          <tr><td>\(P_{\text{privat}}\)</td><td>Jährliche private Rente (Annuität aus \(K\))</td></tr>
         </tbody>
       </table>
 
@@ -711,11 +711,11 @@
         Rentner wieder zur Beitragsbasis gehört.
       </p>
 
-      <h3>Modellansatz Eigenvorsorge: private Ersatzrate \(\rho_{\text{priv}}\)</h3>
+      <h3>Modellansatz Eigenvorsorge: private Ersatzrate \(\rho_{\text{privat}}\)</h3>
       <p class="sources-list" style="line-height:1.45;">
         Zusätzlich wird eine private Vorsorgesäule modelliert: Individuen sparen jedes Jahr einen Anteil
         \(s\) ihres Lohns, erzielen eine reale Rendite \(r\) und beziehen später aus dem angesparten Kapital
-        eine private Rente. Dieses Modul wirkt auf einer <strong>anderen Ebene</strong>:
+        eine private Rente. Dieses Vorsorgemodell wirkt auf einer <strong>anderen Ebene</strong>:
         Die Umlageformel bestimmt die Finanzierungslogik der gesetzlichen Säule, während die private Säule
         das Gesamtalterseinkommen ergänzt.
       </p>
@@ -735,7 +735,7 @@
         (für \(r &gt; 0\); für \(r=0\) reduziert sich das auf \(K = s \,\bar w\, T_C\)).
         Die jährliche private Rente als Annuität ist
         <span class="math-inline">
-          \(P_{\text{priv}} = K \cdot \dfrac{r}{1 - (1+r)^{-T_R}}\)
+          \(P_{\text{privat}} = K \cdot \dfrac{r}{1 - (1+r)^{-T_R}}\)
         </span>.
       </p>
       <p class="sources-list" style="line-height:1.45;">
@@ -743,14 +743,14 @@
       </p>
       <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
         \[
-        \rho_{\text{priv}} = \frac{P_{\text{priv}}}{\bar w}
+        \rho_{\text{privat}} = \frac{P_{\text{privat}}}{\bar w}
         = s \cdot \frac{[(1+r)^{T_C} - 1]/r}{1 - (1+r)^{-T_R}}.
         \]
       </div>
       <p class="sources-list" style="line-height:1.45;">
         Die Gesamt-Ersatzrate im Alter ergibt sich aus gesetzlicher und privater Säule:
-        <span class="math-inline">\(\rho_{\text{gesamt}} = \rho_{\text{gesetz}} + \rho_{\text{priv}}\)</span>.
-        Im Tool wird \(\rho_{\text{gesetz}}\) in der Umlageformel genutzt, \(\rho_{\text{priv}}\) dient zur
+        <span class="math-inline">\(\rho_{\text{gesamt}} = \rho_{\text{gesetz}} + \rho_{\text{privat}}\)</span>.
+        Im Tool wird \(\rho_{\text{gesetz}}\) in der Umlageformel genutzt, \(\rho_{\text{privat}}\) dient zur
         Beurteilung des gesamten Alterseinkommens. Ein wichtiger didaktischer Punkt ist, dass
         private Vorsorge zwar das individuelle Alterseinkommen erhöhen und politische Spielräume
         bei \(\rho_{\text{gesetz}}\) eröffnen kann, aber <strong>die Umlagemechanik selbst</strong> (insbesondere die
@@ -765,7 +765,7 @@
         mit ähnlichem \(\tau\). Der weiße Punkt markiert die aktuelle Wahl von \(q\) und \(f\).
       </p>
       <p class="sources-list" style="line-height:1.45;">
-        Die private Vorsorge-Ebene (\(\rho_{\text{priv}}, \rho_{\text{gesamt}}\)) wird separat berechnet
+        Die private Vorsorge-Ebene (\(\rho_{\text{privat}}, \rho_{\text{gesamt}}\)) wird separat berechnet
         und in den Kennzahlen ausgegeben; sie beeinflusst das Konturdiagramm nicht direkt, da dieses die
         reine Umlagefinanzierung visualisiert.
       </p>
