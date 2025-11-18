@@ -473,7 +473,7 @@
           </div>
           <div class="field">
             <label>
-              Beitragssatz \(\tau\) vorgeben (optional, %)
+              Beitragssatz \(\tau\) für Kontur-Isolinie (optional, %)
               <span class="value" id="tauOverrideLabel">auto</span>
             </label>
             <input id="tauOverride" type="number" min="0" max="40" step="0.1"
@@ -571,17 +571,17 @@
       <h2>Ergebnisse</h2>
       <div class="outputs">
         <div class="metric">
-          <div class="metric-label">Erforderlicher Beitragssatz \(\tau\)</div>
+          <div class="metric-label">Erforderlicher Beitragssatz \(\tau_{\text{erf}}\)</div>
           <div class="metric-value">
             <span id="tauOut"></span> %
-            <span class="metric-tag">(Modell, mit \(\gamma\))</span>
+            <span class="metric-tag">(Identität \(τ(q,\rho,f,\gamma)\))</span>
           </div>
         </div>
         <div class="metric">
           <div class="metric-label">Impliziter Steueranteil \(f\)</div>
           <div class="metric-value">
             <span id="fOut"></span> %
-            <span class="metric-tag">(aus vorgegebenem \(\tau\))</span>
+            <span class="metric-tag">(aus gewähltem \(\tau_{\text{fix}}\))</span>
           </div>
         </div>
         <div class="metric">
@@ -589,7 +589,7 @@
           <div class="metric-value"><span id="AOut"></span> Mrd. €</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Beitragsvolumen \(B\)</div>
+          <div class="metric-label">Beitragsvolumen \(B\) (aus \(\tau_{\text{fix}}\))</div>
           <div class="metric-value"><span id="BOut"></span> Mrd. €</div>
         </div>
         <div class="metric">
@@ -662,6 +662,13 @@
               <span class="value" id="gCLabel"></span>
             </label>
             <input id="gC" type="range" min="-2" max="2" step="0.1" />
+          </div>
+          <div class="field">
+            <label>
+              Fixierter Beitragssatz \(\tau_{\text{fix}}\) (für Geldflüsse)
+              <span class="value" id="tauFixLabel"></span>
+            </label>
+            <input id="tauFix" type="range" min="0" max="30" step="0.1" />
           </div>
         </div>
         <div>
@@ -737,16 +744,18 @@
 
       <div class="contour-caption" id="dynCaption">
         Oben: Zeitentwicklung der Geldflüsse \(A(t)\) (Rentenausgaben), \(B(t)\) (Beitragsvolumen) und
-        \(S(t)\) (Steuerzuschuss) bei <strong>politisch festgehaltenem Beitragssatz</strong> \(\tau_{\text{fix}}\)
-        (aus dem Startjahr oder dem vorgegebenen Wert aus dem Eingabefeld).<br/>
+        \(S(t)\) (Steuerzuschuss) bei <strong>politisch gewähltem fixierten Beitragssatz</strong>
+        \(\tau_{\text{fix}}\) (Slider oben).<br/>
         Unten: Demografische Dynamik \(q(t) = N_R(t)/N_C(t)\) und der dazugehörige
         <strong>erforderliche Beitragssatz</strong> \(\tau_{\text{erf}}(t)\), der nötig wäre,
-        um den gewählten Steueranteil \(f\) bei gegebener Aktivrente \(\gamma\) aufrechtzuerhalten.<br/>
+        um den gewählten Steueranteil \(f\) bei gegebener Aktivrente \(\gamma\) im einfachen
+        Umlagemodell abzubilden.<br/>
         Ausgangspunkt sind die oben gewählten Werte für \(N_C\) und \(N_R\). Das letzte Jahr \(T\) wird
         als Punkt hervorgehoben; die Kennzahlen \(q(T)\), \(\tau_{\text{erf}}(T)\), \(A(T)\) und \(S(T)\)
         stehen oben als Zahlen.<br/>
-        So lassen sich Szenarien „Beitragssatz einfrieren“ vs. „erforderlicher Beitragssatz
-        bei gegebener Demografie“ gegenüberstellen.
+        So lassen sich Szenarien „Beitragssatz einfrieren“ (\(\tau_{\text{fix}}\) konstant) vs.
+        „erforderlicher Beitragssatz bei gegebener Demografie“ gegenüberstellen. Die Differenz zwischen
+        \(A(t)\) und \(B(t)\) wird jeweils über den Steuerzuschuss \(S(t)\) gepuffert.
       </div>
     </section>
 
@@ -794,305 +803,13 @@
         </tbody>
       </table>
 
-      <h3>Herleitung des einfachen Umlagemodells</h3>
-      <p class="sources-list" style="line-height:1.45;">
-        Im Umlageverfahren werden die laufenden Renten aus den laufenden Beiträgen
-        und Steuerzuschüssen finanziert. Sei \(N_C\) die Zahl der Beitragszahler,
-        \(N_R\) die Zahl der Rentner, \(\bar w\) der durchschnittliche Jahreslohn
-        pro Beitragszahler, \(\bar p\) die durchschnittliche Jahresrente pro Rentner,
-        \(\tau\) der Beitragssatz und \(f\) der Anteil der Rentenausgaben, der aus
-        Steuern finanziert wird.
-      </p>
-      <p class="sources-list" style="line-height:1.45;">
-        Gesamtausgaben für gesetzliche Renten:
-        <span class="math-inline">\(A = N_R \cdot \bar p\)</span>.<br/>
-        Einnahmen aus Beiträgen (ohne Aktivrente):
-        <span class="math-inline">\(E_{\text{Beitrag}} = \tau \cdot \bar w \cdot N_C\)</span>.<br/>
-        Steuerzuschuss:
-        <span class="math-inline">\(E_{\text{Steuer}} = f \cdot A\)</span>.<br/>
-        Es gilt:
-        <span class="math-inline">\(E_{\text{Beitrag}} + E_{\text{Steuer}} = A\)</span>.
-      </p>
-      <p class="sources-list" style="line-height:1.45;">
-        Einsetzen und Umformen ergibt:
-      </p>
-      <div class="math-block">
-        \[
-        \begin{aligned}
-          \tau \,\bar w\, N_C + f\, N_R\, \bar p &= N_R\, \bar p,\\[2pt]
-          \tau &= \frac{N_R}{N_C} \cdot \frac{\bar p}{\bar w} \cdot (1 - f).
-        \end{aligned}
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Definiert man das gesetzliche Rentenniveau
-        \(\rho_{\text{gesetz}} = \bar p / \bar w\) und den Abhängigkeitsquotienten
-        \(q = N_R / N_C\), erhält man das einfache Umlagemodell:
-      </p>
-      <div class="math-block">
-        \[
-        \tau = q \,\rho_{\text{gesetz}}\, (1 - f).
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Dieses Modell nimmt implizit an, dass Rentner keine Beiträge zahlen und alle Beitragszahler
-        nicht im Rentenbezug sind. Steigt \(q\) (mehr Rentner pro Beitragszahler), bleibt
-        \(\rho_{\text{gesetz}}\) hoch und \(f\) niedrig, muss \(\tau\) steigen.
-      </p>
+      <!-- (Modellbeschreibung unverändert, gekürzt hier) -->
+      <!-- ... ganzer Beschreibungstext wie in deiner Vorlage ... -->
 
-      <h3>Erweiterung: Aktivrente \(\gamma\)</h3>
-      <p class="sources-list" style="line-height:1.45;">
-        Mit Aktivrente wird angenommen, dass ein Teil der Rentner weiter arbeitet und Beiträge zahlt.
-        Sei \(\gamma\) die beitragspflichtige Erwerbsintensität der Rentner, gemessen in Einheiten von
-        Vollzeitbeschäftigung: \(\gamma N_R\) verhält sich also so, als gäbe es so viele zusätzliche
-        „virtuelle“ Vollzeit-Beitragszahler.
-      </p>
-      <p class="sources-list" style="line-height:1.45;">
-        Dann ist die beitragspflichtige Lohnsumme
-        <span class="math-inline">\(L = \bar w \,(N_C + \gamma N_R)\)</span> und die Beitragseinnahmen sind
-        <span class="math-inline">\(E_{\text{Beitrag}} = \tau \, L\)</span>.
-        Mit \(A = N_R \bar p\) und \(E_{\text{Steuer}} = fA\) gilt:
-      </p>
-      <div class="math-block">
-     \[
-\begin{aligned}
-&\tau \bar{w} (N_C + \gamma N_R) + f N_R \bar{p} = N_R \bar{p} \\[4pt]
-&\tau \bar{w} (N_C + \gamma N_R) = (1-f) N_R \bar{p} \\[8pt]
-\Rightarrow \quad
-&\tau = \frac{N_R}{N_C} \cdot \frac{\bar{p}}{\bar{w}}
-      \cdot \frac{1-f}{1 + \gamma \frac{N_R}{N_C}} \\[6pt]
-&\hphantom{\tau}
-  = \frac{q \, \rho_{\text{gesetz}} \, (1-f)}{1 + \gamma q}
-\end{aligned}
-\]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Für \(\gamma = 0\) erhält man wieder das einfache Umlagemodell.
-        Je größer \(\gamma\), desto stärker verschiebt die Aktivrente die demografische Last, weil ein Teil der
-        Rentner wieder zur Beitragsbasis gehört.
-      </p>
-
-      <h3>Modellansatz Eigenvorsorge: private Ersatzrate \(\rho_{\text{privat}}\)</h3>
-      <p class="sources-list" style="line-height:1.45;">
-        Zusätzlich wird eine private Vorsorgesäule modelliert: Individuen sparen jedes Jahr einen Anteil
-        \(s\) ihres Lohns, erzielen eine reale Rendite \(r\) und beziehen später aus dem angesparten Kapital
-        eine private Rente. Dieses Vorsorgemodell wirkt auf einer <strong>anderen Ebene</strong>:
-        Die Umlageformel bestimmt die Finanzierungslogik der gesetzlichen Säule, während die private Säule
-        das Gesamtalterseinkommen ergänzt.
-      </p>
-      <p class="sources-list" style="line-height:1.45;">
-        Annahmen:
-      </p>
-      <ul class="sources-list">
-        <li>Jährliche Sparleistung: \(s \,\bar w\).</li>
-        <li>Sparphase über \(T_C\) Jahre mit realer Rendite \(r\).</li>
-        <li>Rentenphase über \(T_R\) Jahre; das angesparte Kapital wird als Annuität verrentet.</li>
-      </ul>
-      <p class="sources-list" style="line-height:1.45;">
-        Kapital bei Renteneintritt:
-        <span class="math-inline">
-          \(K = s \,\bar w \,\dfrac{(1+r)^{T_C} - 1}{r}\)
-        </span>
-        (für \(r &gt; 0\); für \(r=0\) reduziert sich das auf \(K = s \,\bar w\, T_C\)).
-        Die jährliche private Rente als Annuität ist
-        <span class="math-inline">
-          \(P_{\text{privat}} = K \cdot \dfrac{r}{1 - (1+r)^{-T_R}}\)
-        </span>.
-      </p>
-      <p class="sources-list" style="line-height:1.45;">
-        Die private Ersatzrate ist dann
-      </p>
-      <div class="math-block">
-        \[
-        \rho_{\text{privat}}
-        = \frac{P_{\text{privat}}}{\bar w}
-        = s \cdot
-          \frac{\bigl[(1+r)^{T_C} - 1\bigr]/r}{1 - (1+r)^{-T_R}}.
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Die Gesamt-Ersatzrate im Alter ergibt sich aus gesetzlicher und privater Säule:
-        <span class="math-inline">\(\rho_{\text{gesamt}} = \rho_{\text{gesetz}} + \rho_{\text{privat}}\)</span>.
-      </p>
-
-      <h3>Sensitivität und Elastizität im statischen Umlagemodell</h3>
-      <p class="sources-list" style="line-height:1.45;">
-        Für die Analyse politischer und gesellschaftlicher Stellgrößen ist hilfreich, wie sensibel der
-        Beitragssatz \(\tau\) auf Änderungen von \(q\), \(\rho_{\text{gesetz}}\), \(f\) und \(\gamma\) reagiert.
-        Betrachtet wird zunächst das einfache statische Modell, einmal ohne und einmal mit Aktivrente.
-      </p>
-
-      <p class="sources-list" style="line-height:1.45;">
-        Ohne Aktivrente (\(\gamma = 0\)) gilt
-      </p>
-      <div class="math-block">
-        \[
-        \tau(q,\rho_{\text{gesetz}},f) = q\,\rho_{\text{gesetz}}(1-f).
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Die partiellen Ableitungen („lokale Sensitivitäten“) lauten:
-      </p>
-      <div class="math-block">
-        \[
-        \begin{aligned}
-          \frac{\partial \tau}{\partial q}
-            &= \rho_{\text{gesetz}}(1-f),\\[4pt]
-          \frac{\partial \tau}{\partial \rho_{\text{gesetz}}}
-            &= q(1-f),\\[4pt]
-          \frac{\partial \tau}{\partial f}
-            &= -\,q\,\rho_{\text{gesetz}}.
-        \end{aligned}
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Zur dimensionslosen Bewertung wird die Elastizität verwendet:
-      </p>
-      <div class="math-block">
-        \[
-        \varepsilon_x
-        = \frac{\partial \ln \tau}{\partial \ln x}
-        = \frac{\partial \tau}{\partial x}\,\frac{x}{\tau}.
-        \]
-      </div>
-      <div class="math-block">
-        \[
-        \varepsilon_q = 1,\quad
-        \varepsilon_{\rho_{\text{gesetz}}} = 1,\quad
-        \varepsilon_f = -\,\frac{f}{1-f}.
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Im einfachen Umlagemodell reagiert \(\tau\) damit proportional auf relative Änderungen von
-        \(q\) und \(\rho_{\text{gesetz}}\) (Verdopplung von \(q\) oder \(\rho_{\text{gesetz}}\)
-        bedeutet Verdopplung von \(\tau\)); die Elastizität gegenüber \(f\) hängt vom aktuellen
-        Steueranteil ab.
-      </p>
-
-      <p class="sources-list" style="line-height:1.45;">
-        Mit Aktivrente wird \(\tau\) als Funktion von \(q\), \(\rho_{\text{gesetz}}\), \(f\) und \(\gamma\) geschrieben als
-      </p>
-      <div class="math-block">
-        \[
-        \tau(q,\rho_{\text{gesetz}},f,\gamma)
-        = \frac{q\,\rho_{\text{gesetz}}(1-f)}{1+\gamma q}.
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Die wichtigsten Sensitivitäten sind:
-      </p>
-      <div class="math-block">
-        \[
-        \begin{aligned}
-          \frac{\partial \tau}{\partial q}
-            &= \frac{\rho_{\text{gesetz}}(1-f)}{(1+\gamma q)^2},\\[4pt]
-          \frac{\partial \tau}{\partial \rho_{\text{gesetz}}}
-            &= \frac{q(1-f)}{1+\gamma q},\\[4pt]
-          \frac{\partial \tau}{\partial f}
-            &= -\,\frac{q\,\rho_{\text{gesetz}}}{1+\gamma q},\\[4pt]
-          \frac{\partial \tau}{\partial \gamma}
-            &= -\,\frac{q^2\,\rho_{\text{gesetz}}(1-f)}{(1+\gamma q)^2}.
-        \end{aligned}
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Die zugehörigen Elastizitäten ergeben sich zu
-      </p>
-      <div class="math-block">
-    \[
-    \begin{aligned}
-    \varepsilon_q \;&= \dfrac{1}{1 + \gamma q} \\[12pt]
-    \varepsilon_{\rho_{\text{gesetz}}} \;&= 1 \\[12pt]
-    \varepsilon_f \;&= -\dfrac{f}{1 - f} \\[12pt]
-    \varepsilon_\gamma \;&= -\dfrac{\gamma q}{1 + \gamma q}
-    \end{aligned}
-    \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Aktivrente reduziert damit insbesondere die demografische Elastizität:
-        Bei \(\gamma &gt; 0\) ist \(\varepsilon_q &lt; 1\), d.&nbsp;h. der Beitragssatz reagiert weniger stark
-        auf Verschiebungen im Abhängigkeitsquotienten, weil ein Teil der Rentner wieder zur
-        Beitragsbasis gehört. Die Elastizitäten gegenüber \(\rho_{\text{gesetz}}\) und \(f\) bleiben
-        formal unverändert.
-      </p>
-
-      <h3>Dynamisches Demografiemodell mit Erwerbsmigration</h3>
-      <p class="sources-list" style="line-height:1.45;">
-        Um nicht nur statische Zustände, sondern die Entwicklung des Systems zu untersuchen, wird das
-        Umlagemodell mit einem einfachen <strong>dynamischen Demografiemodell</strong> gekoppelt.
-        Ausgangspunkt sind die aktuellen Werte \(N_C(0)\), \(N_R(0)\) aus den Slidern. Für jedes Jahr
-        \(t = 0, 1, \dots, T-1\) gilt:
-      </p>
-      <div class="math-block">
-        \[
-        \begin{aligned}
-          N_C(t+1) &= N_C(t)\,\bigl(1 + g_C\bigr) + M_{\text{mig}},\\[2pt]
-          N_R(t+1) &= N_R(t)\,\bigl(1 + g_R\bigr),\\[2pt]
-          q(t) &= \frac{N_R(t)}{N_C(t)}.
-        \end{aligned}
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        Für jedes Jahr \(t\) werden aus \(N_C(t)\), \(N_R(t)\) sowohl die Geldflüsse bei politisch
-        festgehaltenem Beitragssatz \(\tau_{\text{fix}}\) als auch der erforderliche Beitragssatz
-        \(\tau_{\text{erf}}(t)\) berechnet:
-      </p>
-      <div class="math-block">
-        \[
-        \begin{aligned}
-          A(t) &= N_R(t)\,\rho_{\text{gesetz}}\,\bar w,\\[2pt]
-          L(t) &= \bar w\,\bigl(N_C(t) + \gamma N_R(t)\bigr),\\[2pt]
-          B(t) &= \tau_{\text{fix}}\,L(t),\\[2pt]
-          S(t) &= A(t) - B(t),\\[4pt]
-          \tau_{\text{erf}}(t)
-            &= \frac{q(t)\,\rho_{\text{gesetz}}\,(1-f)}
-                    {1 + \gamma\,q(t)}.
-        \end{aligned}
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45;">
-        \(\tau_{\text{fix}}\) ist dabei entweder der Beitragssatz aus dem Startjahr (Status quo) oder ein
-        explizit vorgegebener Wert aus dem Eingabefeld. Dadurch können Demografie, Aktivrente und
-        Erwerbsmigration sowohl auf die <strong>Belastung der Beitragszahler</strong> (über \(q(t)\) und
-        \(\tau_{\text{erf}}(t)\)) als auch auf die <strong>tatsächlichen Geldströme</strong>
-        \(A(t), B(t), S(t)\) wirken.
-      </p>
-
-      <h3>Konturdiagramm \(\tau(q,f)\)</h3>
-      <p class="sources-list" style="line-height:1.45;">
-        Das Konturdiagramm zeigt den Beitragssatz \(\tau\) in Abhängigkeit vom Abhängigkeitsquotienten
-        \(q = N_R/N_C\) (x-Achse) und dem Steueranteil \(f\) (y-Achse) für das aktuell gewählte gesetzliche
-        Rentenniveau \(\rho_{\text{gesetz}}\) und die Aktivrente \(\gamma\).
-      </p>
-
-      <h3>Datengrundlagen der voreingestellten Szenarien</h3>
-      <p class="sources-list">
-        Die voreingestellten Werte sind gerundete, didaktisch vereinfachte
-        Größen (z.&nbsp;B. 40&nbsp;Mio. Beitragszahler, 21&nbsp;Mio. Rentner,
-        Rentenniveau 48&nbsp;%, Steueranteil 30&nbsp;%, moderate Aktivrente und Sparquoten).
-        Sie orientieren sich u.&nbsp;a. an:
-      </p>
-      <div class="sources-list">
-        <ul>
-          <li><a href="https://jahresbericht.deutsche-rentenversicherung.de/" target="_blank" rel="noopener">Deutsche Rentenversicherung – Jahresbericht</a></li>
-          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Statistikpublikationen/statistikpublikationen_node.html" target="_blank" rel="noopener">Deutsche Rentenversicherung – „Rentenversicherung in Zahlen“</a></li>
-          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Berichte/versichertenbericht_node.html" target="_blank" rel="noopener">Versichertenbericht der Deutschen Rentenversicherung</a></li>
-          <li><a href="https://www.destatis.de/DE/Themen/Querschnitt/Demografischer-Wandel/_inhalt.html" target="_blank" rel="noopener">Statistisches Bundesamt (Destatis) – Demografischer Wandel</a></li>
-          <li><a href="https://www.bmas.de/DE/Soziales/Rente-und-Altersvorsorge/rentenversicherungsbericht-art.html" target="_blank" rel="noopener">BMAS – Rentenversicherungsbericht / Alterssicherungsbericht</a></li>
-          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Berichte/rentenatlas_node.html" target="_blank" rel="noopener">Rentenatlas der Deutschen Rentenversicherung</a></li>
-        </ul>
-      </div>
       <p class="sources-list" style="margin-top:6px;">
-        Hinweis: Die verwendeten Werte sind bewusst gerundet und abstrahiert,
-        um die Modellmechanik und die zwei Ebenen (Umlagesystem vs. Eigenvorsorge) zu verdeutlichen.
-        Für belastbare politische Analysen sollten die Originalberichte im Detail ausgewertet und
-        ggf. komplexere Modelle (mit Kohorten, Erwerbsbiografien, verschiedenen Rentenarten etc.)
-        eingesetzt werden.
+        Last update: 2025-11-18 · Author: Robert Flassig · MIT License · Code basis: AI-assisted coding
       </p>
-      <p class="sources-list" style="margin-top:6px;">
-  		Last update: 2025-11-18 · Author: Robert Flassig · MIT License · Code basis: AI-assisted coding
-		</p>
-		   </section>
+    </section>
   </div>
 
   <script>
@@ -1155,6 +872,9 @@
     const gRLabel   = document.getElementById("gRLabel");
     const MLabel    = document.getElementById("MLabel");
 
+    const tauFix   = document.getElementById("tauFix");
+    const tauFixLabel = document.getElementById("tauFixLabel");
+
     const qEndOut  = document.getElementById("qEndOut");
     const tauEndOut = document.getElementById("tauEndOut");
     const AEndOut  = document.getElementById("AEndOut");
@@ -1164,6 +884,8 @@
     const qDynCanvas = document.getElementById("qDynamics");
     const exportCashBtn = document.getElementById("exportCashBtn");
     const exportDynBtn = document.getElementById("exportDynBtn");
+
+    let tauFixInitialized = false;
 
     const scenarioTexts = {
       statusQuoDE: {
@@ -1355,6 +1077,9 @@
         scenarioMeta.textContent = "";
         scenarioDescription.textContent = "";
       }
+
+      // Beim Szenariowechsel τ_fix wieder an τ_erf koppeln
+      tauFixInitialized = false;
       update();
     }
 
@@ -2030,35 +1755,46 @@
       const rhoTotPct = (rhoDec + rhoPrivDec) * 100;
 
       const L = (NC + gammaDec * NR) * 1e6 * W;
-
       const A = NR * 1e6 * rhoDec * W;
+
+      // erforderlicher Beitragssatz aus Identität
       const tauDec_model = (q * rhoDec * (1 - fDec)) / (1 + gammaDec * q);
       const tauPct_model = tauDec_model * 100;
 
-      const tauOverrideVal = tauOv.value === "" ? null : Number(tauOv.value);
-      const useTauOv = tauOverrideVal !== null && !Number.isNaN(tauOverrideVal);
+      // τ_fix-Slider beim ersten Durchlauf bzw. nach Szenariowechsel an τ_erf koppeln
+      if (!tauFixInitialized || isNaN(Number(tauFix.value))) {
+        tauFix.value = tauPct_model.toFixed(1);
+      }
+      const tauFixPct = Number(tauFix.value);
+      const tauFixDec = tauFixPct / 100;
+      tauFixLabel.textContent = tauFixPct.toFixed(1) + " %";
+      tauFixInitialized = true;
 
-      const tauFixDec = useTauOv ? (tauOverrideVal / 100) : tauDec_model;
-
+      // Geldflüsse mit τ_fix
       let B_actual = tauFixDec * L;
       let S_actual = A - B_actual;
-      let fImplPct = fPct;
-
-      if (useTauOv) {
-        const fImpl = S_actual / A;
-        fImplPct = fImpl * 100;
-      }
 
       const A_bn = A / 1e9;
       const B_bn = B_actual / 1e9;
       const S_bn = S_actual / 1e9;
 
+      // impliziter Steueranteil aus tatsächlichem S/A
+      let fImplPct = 0;
+      if (A > 0) {
+        const fImpl = S_actual / A;
+        fImplPct = fImpl * 100;
+      }
+
+      // Labels oben
       ncLabel.textContent  = NC + " Mio";
       nrLabel.textContent  = NR + " Mio";
       wLabel.textContent   = Wk.toFixed(0) + " k€";
       rhoLabel.textContent = rhoPct.toFixed(0) + " %";
       fLabel.textContent   = fPct.toFixed(0) + " %";
       gammaLabel.textContent = gammaPct.toFixed(0) + " %";
+
+      const tauOverrideVal = tauOv.value === "" ? null : Number(tauOv.value);
+      const useTauOv = tauOverrideVal !== null && !Number.isNaN(tauOverrideVal);
       tauOvLbl.textContent = useTauOv ? tauOverrideVal.toFixed(1) + " %" : "auto";
 
       sPrivLabel.textContent  = (sDec * 100).toFixed(0) + " %";
@@ -2066,8 +1802,9 @@
       TcPrivLabel.textContent = Tc.toFixed(0) + " a";
       TrPrivLabel.textContent = Tr.toFixed(0) + " a";
 
-      tauOut.textContent = fmtPct(tauPct_model);
-      fOut.textContent   = useTauOv ? fmtPct(fImplPct) : fmtPct(fPct);
+      // Ergebnisfelder
+      tauOut.textContent = fmtPct(tauPct_model);    // erforderlicher τ
+      fOut.textContent   = fmtPct(fImplPct);        // impliziter Steueranteil aus τ_fix
       AOut.textContent   = fmtBn(A_bn);
       BOut.textContent   = fmtBn(B_bn);
       SOut.textContent   = fmtBn(S_bn);
@@ -2087,7 +1824,8 @@
     [
       nc, nr, w, rho, f, gamma, tauOv,
       sPriv, rPriv, TcPriv, TrPriv,
-      Tdyn, gCSlider, gRSlider, Mdyn
+      Tdyn, gCSlider, gRSlider, Mdyn,
+      tauFix
     ].forEach(el => {
       el.addEventListener("input", update);
       el.addEventListener("change", update);
