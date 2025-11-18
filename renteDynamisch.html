@@ -234,6 +234,16 @@
       display: block;
       margin-top: 8px;
     }
+    /* Geldfluss-Canvas */
+    #flowsDynamics {
+      width: 100%;
+      height: 240px;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: #020617;
+      display: block;
+      margin-top: 14px;
+    }
     .dyn-legend {
       margin-top: 4px;
       font-size: 0.78rem;
@@ -257,6 +267,15 @@
       background: rgba(56, 189, 248, 0.9);
     }
     .dyn-legend-swatch.tau {
+      background: rgba(250, 204, 21, 0.9);
+    }
+    .dyn-legend-swatch.A {
+      background: rgba(56, 189, 248, 0.9);
+    }
+    .dyn-legend-swatch.B {
+      background: rgba(34, 197, 94, 0.9);
+    }
+    .dyn-legend-swatch.S {
       background: rgba(250, 204, 21, 0.9);
     }
 
@@ -362,6 +381,9 @@
       #qDynamics {
         height: 220px;
       }
+      #flowsDynamics {
+        height: 210px;
+      }
     }
     @media (max-width: 500px) {
       header {
@@ -372,6 +394,9 @@
       }
       #qDynamics {
         height: 200px;
+      }
+      #flowsDynamics {
+        height: 190px;
       }
     }
   </style>
@@ -685,24 +710,40 @@
       <canvas id="qDynamics"></canvas>
       <div class="dyn-legend">
         <div class="dyn-legend-item">
-          <span class="dyn-legend-swatch q"></span> q(t) = N<span style="font-size:0.75em;">R</span>/N<span style="font-size:0.75em;">C</span> (linke Achse), τ(t) (rechte Achse, in %
+          <span class="dyn-legend-swatch q"></span> q(t) = N<span style="font-size:0.75em;">R</span>/N<span style="font-size:0.75em;">C</span> (Formverlauf auch für τ(t), bis auf Skalierung)
         </div>
       </div>
       <div class="export-bar">
         <button id="exportDynBtn" class="export-btn">
-          Zeitpfade als PNG exportieren
+          Zeitpfad q(t) als PNG exportieren
         </button>
       </div>
 
+      <canvas id="flowsDynamics"></canvas>
+      <div class="dyn-legend">
+        <div class="dyn-legend-item">
+          <span class="dyn-legend-swatch A"></span> A(t) – Rentenausgaben
+        </div>
+        <div class="dyn-legend-item">
+          <span class="dyn-legend-swatch B"></span> B(t) – Beitragsvolumen
+        </div>
+        <div class="dyn-legend-item">
+          <span class="dyn-legend-swatch S"></span> S(t) – Steuerzuschuss
+        </div>
+        <div class="dyn-legend-item">
+          (alle in Mrd. €)
+        </div>
+      </div>
+
       <div class="contour-caption" id="dynCaption">
-        Zeitentwicklung von \(q(t) = N_R(t)/N_C(t)\) und dem dazugehörigen Beitragssatz \(\tau(t)\).
-        Ausgangspunkt sind die oben gewählten Werte für \(N_C\) und \(N_R\). Das letzte Jahr \(T\) wird
+        Oben: Zeitentwicklung von \(q(t) = N_R(t)/N_C(t)\). Für \(\gamma = 0\) ist \(\tau(t)\) bis auf einen konstanten Faktor proportional zu \(q(t)\), d.&nbsp;h. der Formverlauf ist identisch.<br/>
+        Unten: „Stacked lines“ der Geldflüsse \(A(t)\), \(B(t)\) und \(S(t)\) in Mrd.&nbsp;€. Ausgangspunkt sind die oben gewählten Werte für \(N_C\) und \(N_R\). Das letzte Jahr \(T\) wird
         als Punkt hervorgehoben; die Kennzahlen \(q(T)\), \(\tau(T)\), \(A(T)\) und \(S(T)\) stehen oben
         als Zahlen.<br/>
         Die Dynamik folgt einem einfachen Jahresmodell mit Wachstumsraten \(g_C, g_R\) und einem
         Quellterm für Erwerbsmigration \(M_{\text{mig}}\), der jährlich zur Gruppe der
         Beitragszahler hinzukommt (\(N_C\) in Mio.). Bei gegebenem politischen Setting
-        \((\rho_{\text{gesetz}}, f, \gamma)\) bestimmt \(q(t)\) direkt die Entwicklung von
+        \((\rho_{\text{gesetz}}, f, \gamma)\) bestimmt \(q(t)\) die Entwicklung von
         Beitragssatz \(\tau(t)\), Rentenausgaben \(A(t)\) und Steuerzuschuss \(S(t)\).<br/>
         Damit lassen sich z.&nbsp;B. Szenarien „mehr Steuerfinanzierung heute“ vs. „gezielte Investitionen in
         Erwerbsmigration“ vergleichen.
@@ -754,7 +795,7 @@
       </table>
 
       <h3>Herleitung des einfachen Umlage-Modells</h3>
-      <p class="sources-list" style="line-height:1.45;">
+      <p class="sources-list" style="line-height:1.45%;">
         Im Umlageverfahren werden die laufenden Renten aus den laufenden Beiträgen
         und Steuerzuschüssen finanziert. Sei \(N_C\) die Zahl der Beitragszahler,
         \(N_R\) die Zahl der Rentner, \(\bar w\) der durchschnittliche Jahreslohn
@@ -916,9 +957,9 @@
         \]
       </div>
       <p class="sources-list" style="line-height:1.45%;">
-        Im Tool werden die Pfade \(q(t)\) und \(\tau(t)\) in einem gemeinsamen Diagramm geplottet
-        (linke bzw. rechte y-Achse). Für das letzte Jahr \(T\) werden \(q(T)\), \(\tau(T)\),
-        \(A(T)\) und \(S(T)\) zusätzlich als Kennzahlen ausgeben.
+        Im Tool wird der Pfad \(q(t)\) als Kurve geplottet; für \(\gamma = 0\) ist \(\tau(t)\) bis auf einen konstanten Faktor proportional zu \(q(t)\), so dass eine Kurve den Formverlauf beider Größen abbildet.
+        In einem zweiten Diagramm werden die Pfade der Geldflüsse \(A(t)\), \(B(t)\) und \(S(t)\) gemeinsam auf der Skala Mrd.&nbsp;€ dargestellt. Für das letzte Jahr \(T\) werden \(q(T)\), \(\tau(T)\),
+        \(A(T)\) und \(S(T)\) zusätzlich als Kennzahlen ausgegeben.
       </p>
 
       <h3>Konturdiagramm \(\tau(q,f)\)</h3>
@@ -1012,6 +1053,7 @@
     const SEndOut  = document.getElementById("SEndOut");
 
     const qDynCanvas = document.getElementById("qDynamics");
+    const flowsDynCanvas = document.getElementById("flowsDynamics");
     const exportDynBtn = document.getElementById("exportDynBtn");
 
     const scenarioTexts = {
@@ -1467,7 +1509,7 @@
       }
     }
 
-    function drawDynamicsChart(times, qSeries, tauSeries) {
+    function drawDynamicsChart(times, qSeries) {
       const ctx = qDynCanvas.getContext("2d");
       const width = qDynCanvas.clientWidth;
       const height = qDynCanvas.clientHeight;
@@ -1480,7 +1522,7 @@
       if (!times.length) return;
 
       const paddingLeft = 45;
-      const paddingRight = 45;
+      const paddingRight = 20;
       const paddingTop = 20;
       const paddingBottom = 30;
 
@@ -1488,41 +1530,25 @@
       const plotH = height - paddingTop - paddingBottom;
       if (plotW <= 0 || plotH <= 0) return;
 
-      // Nur gültige Werte benutzen
       const validIdx = times
         .map((_, i) => i)
-        .filter(i => isFinite(qSeries[i]) && isFinite(tauSeries[i]));
+        .filter(i => isFinite(qSeries[i]));
       if (!validIdx.length) return;
 
       const qVals = validIdx.map(i => qSeries[i]);
-      const tauVals = validIdx.map(i => tauSeries[i]);
 
       let minQ = Math.min(...qVals);
       let maxQ = Math.max(...qVals);
       if (!isFinite(minQ) || !isFinite(maxQ)) return;
 
-      // Puffer auf q-Achse
       let qRange = maxQ - minQ;
       if (qRange <= 0) qRange = Math.max(Math.abs(minQ), 0.1) * 0.2;
       const qPad = qRange * 0.15;
       const minQPlot = Math.max(0, minQ - qPad);
       const maxQPlot = maxQ + qPad;
 
-      let minTau = Math.min(...tauVals);
-      let maxTau = Math.max(...tauVals);
-      if (!isFinite(minTau) || !isFinite(maxTau)) {
-        minTau = 0;
-        maxTau = 30;
-      }
-      let tauRange = maxTau - minTau;
-      if (tauRange <= 0) tauRange = Math.max(Math.abs(minTau), 5) * 0.3;
-      const tauPad = tauRange * 0.15;
-      const minTauPlot = Math.max(0, minTau - tauPad);
-      const maxTauPlot = maxTau + tauPad;
-
       const T = times[times.length - 1];
 
-      // Achsen
       ctx.strokeStyle = "rgba(148,163,184,0.8)";
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -1534,7 +1560,6 @@
       ctx.fillStyle = "rgba(148,163,184,0.9)";
       ctx.font = "10px system-ui";
 
-      // x-Achse (Zeit)
       const xTicks = Math.min(5, T || 1);
       for (let i = 0; i <= xTicks; i++) {
         const tVal = (T * i) / xTicks;
@@ -1548,7 +1573,6 @@
       }
       ctx.fillText("Jahre", paddingLeft + plotW / 2 - 15, paddingTop + plotH + 26);
 
-      // linke y-Achse: q(t)
       const yTicks = 4;
       for (let i = 0; i <= yTicks; i++) {
         const frac = i / yTicks;
@@ -1566,46 +1590,10 @@
       ctx.fillText("q(t) = N_R/N_C", 0, 0);
       ctx.restore();
 
-      // rechte y-Achse: τ(t)
-      for (let i = 0; i <= yTicks; i++) {
-        const frac = i / yTicks;
-        const tauVal = minTauPlot + (1 - frac) * (maxTauPlot - minTauPlot);
-        const y = paddingTop + frac * plotH;
-        const x = paddingLeft + plotW;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + 4, y);
-        ctx.stroke();
-        ctx.fillText(tauVal.toFixed(1) + "%", x + 6, y + 3);
-      }
-      ctx.save();
-      ctx.translate(paddingLeft + plotW + 38, paddingTop + plotH / 2 + 10);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillText("τ(t) [%]", 0, 0);
-      ctx.restore();
-
-      // Hilfsfunktionen für Mapping
       const xOf = (t) => paddingLeft + (T === 0 ? 0 : (t / T) * plotW);
       const yOfQ = (q) =>
         paddingTop + ((maxQPlot - q) / (maxQPlot - minQPlot)) * plotH;
-      const yOfTau = (tau) =>
-        paddingTop + ((maxTauPlot - tau) / (maxTauPlot - minTauPlot)) * plotH;
 
-      // 1) τ(t) zuerst (dünner, im Hintergrund)
-      ctx.beginPath();
-      validIdx.forEach((i, k) => {
-        const t = times[i];
-        const tau = tauSeries[i];
-        const x = xOf(t);
-        const y = yOfTau(tau);
-        if (k === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = "rgba(250,204,21,0.9)"; // gelb
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
-
-      // 2) q(t) oben drauf (dicker, auffällig)
       ctx.beginPath();
       validIdx.forEach((i, k) => {
         const t = times[i];
@@ -1615,19 +1603,15 @@
         if (k === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
-      ctx.strokeStyle = "rgba(56,189,248,0.95)"; // kräftiges Cyan
+      ctx.strokeStyle = "rgba(56,189,248,0.95)";
       ctx.lineWidth = 2.2;
       ctx.stroke();
 
-      // Endpunkte markieren (t = T)
       const lastIdx = validIdx[validIdx.length - 1];
       const xLast = xOf(times[lastIdx]);
       const qLast = qSeries[lastIdx];
-      const tauLast = tauSeries[lastIdx];
       const yLastQ = yOfQ(qLast);
-      const yLastTau = yOfTau(tauLast);
 
-      // Marker für q(T)
       ctx.beginPath();
       ctx.arc(xLast, yLastQ, 4, 0, 2 * Math.PI);
       ctx.fillStyle = "#ffffff";
@@ -1635,15 +1619,134 @@
       ctx.strokeStyle = "rgba(56,189,248,0.9)";
       ctx.lineWidth = 1.2;
       ctx.stroke();
+    }
 
-      // Marker für τ(T)
+    function drawFlowsChart(times, ASeries, BSeries, SSeries) {
+      const ctx = flowsDynCanvas.getContext("2d");
+      const width = flowsDynCanvas.clientWidth;
+      const height = flowsDynCanvas.clientHeight;
+      flowsDynCanvas.width = width * window.devicePixelRatio;
+      flowsDynCanvas.height = height * window.devicePixelRatio;
+      ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+
+      ctx.clearRect(0, 0, width, height);
+      if (!times.length) return;
+
+      const paddingLeft = 55;
+      const paddingRight = 20;
+      const paddingTop = 20;
+      const paddingBottom = 30;
+      const plotW = width - paddingLeft - paddingRight;
+      const plotH = height - paddingTop - paddingBottom;
+      if (plotW <= 0 || plotH <= 0) return;
+
+      const validIdx = times
+        .map((_, i) => i)
+        .filter(i => isFinite(ASeries[i]) && isFinite(BSeries[i]) && isFinite(SSeries[i]));
+      if (!validIdx.length) return;
+
+      const allVals = [
+        ...validIdx.map(i => ASeries[i]),
+        ...validIdx.map(i => BSeries[i]),
+        ...validIdx.map(i => SSeries[i])
+      ];
+      let minY = Math.min(...allVals, 0);
+      let maxY = Math.max(...allVals);
+      if (!isFinite(minY) || !isFinite(maxY)) {
+        minY = 0;
+        maxY = 10;
+      }
+      let yRange = maxY - minY;
+      if (yRange <= 0) yRange = Math.max(Math.abs(maxY), 5) * 0.3;
+      const yPad = yRange * 0.15;
+      const minYPlot = Math.max(0, minY - yPad);
+      const maxYPlot = maxY + yPad;
+
+      const T = times[times.length - 1];
+
+      ctx.strokeStyle = "rgba(148,163,184,0.8)";
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(xLast, yLastTau, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(250,204,21,0.9)";
-      ctx.lineWidth = 1.2;
+      ctx.moveTo(paddingLeft, paddingTop);
+      ctx.lineTo(paddingLeft, paddingTop + plotH);
+      ctx.lineTo(paddingLeft + plotW, paddingTop + plotH);
       ctx.stroke();
+
+      ctx.fillStyle = "rgba(148,163,184,0.9)";
+      ctx.font = "10px system-ui";
+
+      const xTicks = Math.min(5, T || 1);
+      for (let i = 0; i <= xTicks; i++) {
+        const tVal = (T * i) / xTicks;
+        const x = paddingLeft + (T === 0 ? 0 : (tVal / T) * plotW);
+        const y = paddingTop + plotH;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + 4);
+        ctx.stroke();
+        ctx.fillText(tVal.toFixed(0), x - 4, y + 14);
+      }
+      ctx.fillText("Jahre", paddingLeft + plotW / 2 - 15, paddingTop + plotH + 26);
+
+      const yTicks = 4;
+      for (let i = 0; i <= yTicks; i++) {
+        const frac = i / yTicks;
+        const yVal = minYPlot + (1 - frac) * (maxYPlot - minYPlot);
+        const y = paddingTop + frac * plotH;
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft - 4, y);
+        ctx.lineTo(paddingLeft, y);
+        ctx.stroke();
+        ctx.fillText(yVal.toFixed(1), paddingLeft - 36, y + 3);
+      }
+      ctx.save();
+      ctx.translate(paddingLeft - 42, paddingTop + plotH / 2 + 10);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText("Mrd. €", 0, 0);
+      ctx.restore();
+
+      const xOf = (t) => paddingLeft + (T === 0 ? 0 : (t / T) * plotW);
+      const yOf = (val) =>
+        paddingTop + ((maxYPlot - val) / (maxYPlot - minYPlot)) * plotH;
+
+      function drawLine(series, color, width) {
+        ctx.beginPath();
+        validIdx.forEach((i, k) => {
+          const t = times[i];
+          const v = series[i];
+          const x = xOf(t);
+          const y = yOf(v);
+          if (k === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.stroke();
+      }
+
+      drawLine(ASeries, "rgba(56,189,248,0.95)", 2.0);  // A(t)
+      drawLine(BSeries, "rgba(34,197,94,0.95)", 1.8);   // B(t)
+      drawLine(SSeries, "rgba(250,204,21,0.95)", 1.8);  // S(t)
+
+      const lastIdx = validIdx[validIdx.length - 1];
+      const xLast = xOf(times[lastIdx]);
+      const yALast = yOf(ASeries[lastIdx]);
+      const yBLast = yOf(BSeries[lastIdx]);
+      const ySLast = yOf(SSeries[lastIdx]);
+
+      function markPoint(x, y, strokeColor) {
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5, 0, 2 * Math.PI);
+        ctx.fillStyle = "#020617";
+        ctx.fill();
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+
+      markPoint(xLast, yALast, "rgba(56,189,248,0.95)");
+      markPoint(xLast, yBLast, "rgba(34,197,94,0.95)");
+      markPoint(xLast, ySLast, "rgba(250,204,21,0.95)");
     }
 
     function updateDynamics(NC0, NR0, W, rhoDec, fDec, gammaDec) {
@@ -1663,6 +1766,9 @@
       const times = [];
       const qSeries = [];
       const tauSeries = [];
+      const ASeries = [];
+      const BSeries = [];
+      const SSeries = [];
 
       let AEnd_bn = NaN;
       let SEnd_bn = NaN;
@@ -1678,12 +1784,16 @@
         const S = A - B;
 
         const A_bn = A / 1e9;
+        const B_bn = B / 1e9;
         const S_bn = S / 1e9;
         const tauPct = tauDec * 100;
 
         times.push(t);
         qSeries.push(q);
         tauSeries.push(tauPct);
+        ASeries.push(A_bn);
+        BSeries.push(B_bn);
+        SSeries.push(S_bn);
 
         if (t === T) {
           AEnd_bn = A_bn;
@@ -1696,7 +1806,8 @@
         NR = NR * (1 + gR);
       }
 
-      drawDynamicsChart(times, qSeries, tauSeries);
+      drawDynamicsChart(times, qSeries);
+      drawFlowsChart(times, ASeries, BSeries, SSeries);
 
       qEndOut.textContent   = fmtRat(qEnd);
       tauEndOut.textContent = fmtPct(tauEndPct);
@@ -1838,7 +1949,7 @@
         const url = qDynCanvas.toDataURL("image/png");
         const link = document.createElement("a");
         link.href = url;
-        link.download = "rentenmodell_dynamik.png";
+        link.download = "rentenmodell_dynamik_q.png";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
