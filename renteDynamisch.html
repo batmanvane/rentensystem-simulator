@@ -89,6 +89,10 @@
       border: 1px solid rgba(56, 189, 248, 0.4);
       font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 0.98rem;
+      max-width: 300px;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
     }
     .card {
       background: rgba(15, 23, 42, 0.9);
@@ -225,10 +229,10 @@
       display: block;
     }
     /* Dynamik-Canvas */
-    #qDynamics,
-    #flowDynamics {
+    #cashDynamics,
+    #qDynamics {
       width: 100%;
-      height: 240px;
+      height: 260px;
       border-radius: 12px;
       border: 1px solid rgba(148, 163, 184, 0.4);
       background: #020617;
@@ -236,7 +240,7 @@
       margin-top: 8px;
     }
     .dyn-legend,
-    .flow-legend {
+    .cash-legend {
       margin-top: 4px;
       font-size: 0.78rem;
       color: var(--muted);
@@ -246,13 +250,13 @@
       align-items: center;
     }
     .dyn-legend-item,
-    .flow-legend-item {
+    .cash-legend-item {
       display: inline-flex;
       align-items: center;
       gap: 4px;
     }
     .dyn-legend-swatch,
-    .flow-legend-swatch {
+    .cash-legend-swatch {
       width: 10px;
       height: 10px;
       border-radius: 999px;
@@ -263,14 +267,14 @@
     .dyn-legend-swatch.tau {
       background: rgba(250, 204, 21, 0.9);
     }
-    .flow-legend-swatch.A {
+    .cash-legend-swatch.A {
       background: rgba(56, 189, 248, 0.9);
     }
-    .flow-legend-swatch.B {
-      background: rgba(34, 197, 94, 0.9);
+    .cash-legend-swatch.B {
+      background: rgba(52, 211, 153, 0.9);
     }
-    .flow-legend-swatch.S {
-      background: rgba(248, 113, 113, 0.9);
+    .cash-legend-swatch.S {
+      background: rgba(250, 204, 21, 0.9);
     }
 
     .export-bar {
@@ -372,9 +376,9 @@
       #tauContour {
         height: 240px;
       }
-      #qDynamics,
-      #flowDynamics {
-        height: 210px;
+      #cashDynamics,
+      #qDynamics {
+        height: 220px;
       }
     }
     @media (max-width: 500px) {
@@ -384,9 +388,9 @@
       h1 {
         font-size: 1.25rem;
       }
-      #qDynamics,
-      #flowDynamics {
-        height: 190px;
+      #cashDynamics,
+      #qDynamics {
+        height: 200px;
       }
     }
   </style>
@@ -399,9 +403,9 @@
         <strong>Einfaches Umlage-Modell</strong> mit Erweiterung um Aktivrente \(\gamma\), private Vorsorge
         und ein dynamisches Demografie-Modell mit Erwerbsmigration.
       </div>
-      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
+      <div class="math-block">
         \[
-          \tau = \frac{q \,\rho_{\text{gesetz}} (1 - f)}{1 + \gamma q}
+          \tau = \frac{q \,\rho_{\text{gesetz}} \,(1 - f)}{1 + \gamma q}
         \]
       </div>
       <div class="subtitle">
@@ -633,7 +637,7 @@
 
       <div class="export-bar">
         <button id="exportChartBtn" class="export-btn">
-          Grafik als PNG exportieren
+          Konturdiagramm als PNG exportieren
         </button>
       </div>
     </section>
@@ -684,7 +688,7 @@
           <div class="metric-value"><span id="qEndOut"></span></div>
         </div>
         <div class="metric">
-          <div class="metric-label">Beitragssatz am Horizont \(\tau(T)\)</div>
+          <div class="metric-label">Erforderlicher Beitragssatz am Horizont \(\tau_{\text{erf}}(T)\)</div>
           <div class="metric-value"><span id="tauEndOut"></span> %</div>
         </div>
         <div class="metric">
@@ -697,47 +701,52 @@
         </div>
       </div>
 
-      <!-- q(t), tau(t) -->
+      <!-- 1. Geldflüsse -->
+      <canvas id="cashDynamics"></canvas>
+      <div class="cash-legend">
+        <div class="cash-legend-item">
+          <span class="cash-legend-swatch A"></span> Rentenausgaben \(A(t)\)
+        </div>
+        <div class="cash-legend-item">
+          <span class="cash-legend-swatch B"></span> Beitragsvolumen \(B(t)\)
+        </div>
+        <div class="cash-legend-item">
+          <span class="cash-legend-swatch S"></span> Steuerzuschuss \(S(t)\)
+        </div>
+      </div>
+      <div class="export-bar">
+        <button id="exportCashBtn" class="export-btn">
+          Geldflüsse als PNG exportieren
+        </button>
+      </div>
+
+      <!-- 2. q(t) und tau_erf(t) -->
       <canvas id="qDynamics"></canvas>
       <div class="dyn-legend">
         <div class="dyn-legend-item">
           <span class="dyn-legend-swatch q"></span>
-          q(t) = N<span style="font-size:0.75em;">R</span>/N<span style="font-size:0.75em;">C</span> (linke Achse)
-        </div>
-        <div class="dyn-legend-item">
-          <span class="dyn-legend-swatch tau"></span>
-          \(\tau(t)\) (rechte Achse, in %)
+          q(t) = N<span style="font-size:0.75em;">R</span>/N<span style="font-size:0.75em;">C</span>
+          (linke Achse), \(\tau_{\text{erf}}(t)\) (rechte Achse, in&nbsp;%)
         </div>
       </div>
       <div class="export-bar">
         <button id="exportDynBtn" class="export-btn">
-          Zeitpfade q(t), τ(t) als PNG exportieren
+          Zeitpfade als PNG exportieren
         </button>
       </div>
 
-      <!-- Geldflüsse A,B,S -->
-      <canvas id="flowDynamics"></canvas>
-      <div class="flow-legend">
-        <div class="flow-legend-item">
-          <span class="flow-legend-swatch A"></span> Rentenausgaben \(A(t)\)
-        </div>
-        <div class="flow-legend-item">
-          <span class="flow-legend-swatch B"></span> Beitragsvolumen \(B(t)\)
-        </div>
-        <div class="flow-legend-item">
-          <span class="flow-legend-swatch S"></span> Steuerzuschuss \(S(t)\)
-        </div>
-        <span>(alle Größen in Mrd. €)</span>
-      </div>
-
       <div class="contour-caption" id="dynCaption">
-        Zeitentwicklung von \(q(t) = N_R(t)/N_C(t)\) und dem dazugehörigen Beitragssatz \(\tau(t)\).
+        Oben: Zeitentwicklung der Geldflüsse \(A(t)\) (Rentenausgaben), \(B(t)\) (Beitragsvolumen) und
+        \(S(t)\) (Steuerzuschuss) bei <strong>politisch festgehaltenem Beitragssatz</strong> \(\tau_{\text{fix}}\)
+        (aus dem Startjahr oder dem vorgegebenen Wert aus dem Eingabefeld).<br/>
+        Unten: Demografische Dynamik \(q(t) = N_R(t)/N_C(t)\) und der dazugehörige
+        <strong>erforderliche Beitragssatz</strong> \(\tau_{\text{erf}}(t)\), der nötig wäre,
+        um den gewählten Steueranteil \(f\) bei gegebener Aktivrente \(\gamma\) aufrechtzuerhalten.<br/>
         Ausgangspunkt sind die oben gewählten Werte für \(N_C\) und \(N_R\). Das letzte Jahr \(T\) wird
-        als Punkt hervorgehoben; die Kennzahlen \(q(T)\), \(\tau(T)\), \(A(T)\) und \(S(T)\) stehen oben
-        als Zahlen.<br/>
-        Der zweite Plot zeigt die Geldflüsse: Rentenausgaben \(A(t)\), Beitragsvolumen \(B(t)\) und
-        Steuerzuschuss \(S(t)\) in Mrd. €. Steigt z.&nbsp;B. die Zahl der Rentner, steigen ceteris paribus
-        \(A(t)\) und – je nach Finanzierung – \(B(t)\) und/oder \(S(t)\) entsprechend.
+        als Punkt hervorgehoben; die Kennzahlen \(q(T)\), \(\tau_{\text{erf}}(T)\), \(A(T)\) und \(S(T)\)
+        stehen oben als Zahlen.<br/>
+        So lassen sich z.&nbsp;B. Szenarien „Beitragssatz einfrieren“ vs. „erforderlicher Beitragssatz
+        bei gegebener Demografie“ vergleichen.
       </div>
     </section>
 
@@ -807,13 +816,12 @@
       <p class="sources-list" style="line-height:1.45%;">
         Einsetzen und Umformen ergibt:
       </p>
-      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
+      <div class="math-block">
         \[
-        \tau \,\bar w\, N_C + f\, N_R\, \bar p = N_R\, \bar p
-        \]
-        \[
-        \Rightarrow \quad
-        \tau = \frac{N_R}{N_C} \cdot \frac{\bar p}{\bar w} \cdot (1 - f)
+        \begin{aligned}
+          \tau \,\bar w\, N_C + f\, N_R\, \bar p &= N_R\, \bar p,\\[2pt]
+          \tau &= \frac{N_R}{N_C} \cdot \frac{\bar p}{\bar w} \cdot (1 - f).
+        \end{aligned}
         \]
       </div>
       <p class="sources-list" style="line-height:1.45%;">
@@ -821,1168 +829,4 @@
         \(\rho_{\text{gesetz}} = \bar p / \bar w\) und den Abhängigkeitsquotienten
         \(q = N_R / N_C\), erhält man das einfache Umlage-Modell:
       </p>
-      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
-        \[
-        \tau = q \,\rho_{\text{gesetz}} (1 - f)
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45%;">
-        Dieses Modell nimmt implizit an, dass Rentner keine Beiträge zahlen und alle Beitragszahler
-        nicht im Rentenbezug sind. Steigt \(q\) (mehr Rentner pro Beitragszahler), bleibt
-        \(\rho_{\text{gesetz}}\) hoch und \(f\) niedrig, muss \(\tau\) steigen.
-      </p>
-
-      <h3>Erweiterung: Aktivrente \(\gamma\)</h3>
-      <p class="sources-list" style="line-height:1.45%;">
-        Mit Aktivrente wird angenommen, dass ein Teil der Rentner weiter arbeitet und Beiträge zahlt.
-        Sei \(\gamma\) die beitragspflichtige Erwerbsintensität der Rentner, gemessen in Einheiten von
-        Vollzeitbeschäftigung: \(\gamma N_R\) verhält sich so, als gäbe es so viele zusätzliche
-        „virtuelle“ Vollzeit-Beitragszahler.
-      </p>
-      <p class="sources-list" style="line-height:1.45%;">
-        Dann ist die beitragspflichtige Lohnsumme
-        <span class="math-inline">\(L = \bar w \,(N_C + \gamma N_R)\)</span> und die Beitragseinnahmen sind
-        <span class="math-inline">\(E_{\text{Beitrag}} = \tau \, L\)</span>.
-        Mit \(A = N_R \bar p\) und \(E_{\text{Steuer}} = fA\) gilt:
-      </p>
-      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:500px;">
-        \[
-        \tau \,\bar w\,(N_C + \gamma N_R) + f\, N_R \bar p = N_R \bar p
-        \]
-        \[
-        \Rightarrow \quad
-        \tau \,\bar w\,(N_C + \gamma N_R) = (1-f) N_R \bar p
-        \]
-        \[
-        \Rightarrow \quad
-        \tau = \frac{q \,\rho_{\text{gesetz}} (1-f)}{1 + \gamma q}
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45%;">
-        Für \(\gamma = 0\) erhält man wieder das einfache Umlage-Modell.
-        Je größer \(\gamma\), desto stärker verschiebt die Aktivrente die demografische Last, weil ein Teil der
-        Rentner wieder zur Beitragsbasis gehört.
-      </p>
-
-      <h3>Modellansatz Eigenvorsorge: private Ersatzrate \(\rho_{\text{privat}}\)</h3>
-      <p class="sources-list" style="line-height:1.45%;">
-        Zusätzlich wird eine private Vorsorgesäule modelliert: Individuen sparen jedes Jahr einen Anteil
-        \(s\) ihres Lohns, erzielen eine reale Rendite \(r\) und beziehen später aus dem angesparten Kapital
-        eine private Rente. Dieses Vorsorgemodell wirkt auf einer <strong>anderen Ebene</strong>:
-        Die Umlageformel bestimmt die Finanzierungslogik der gesetzlichen Säule, während die private Säule
-        das Gesamtalterseinkommen ergänzt.
-      </p>
-      <p class="sources-list" style="line-height:1.45%;">
-        Annahmen:
-      </p>
-      <ul class="sources-list">
-        <li>Jährliche Sparleistung: \(s \,\bar w\).</li>
-        <li>Sparphase über \(T_C\) Jahre mit realer Rendite \(r\).</li>
-        <li>Rentenphase über \(T_R\) Jahre; das angesparte Kapital wird als Annuität verrentet.</li>
-      </ul>
-      <p class="sources-list" style="line-height:1.45%;">
-        Kapital bei Renteneintritt:
-        <span class="math-inline">
-          \(K = s \,\bar w \,\dfrac{(1+r)^{T_C} - 1}{r}\)
-        </span>
-        (für \(r &gt; 0\); für \(r=0\) reduziert sich das auf \(K = s \,\bar w\, T_C\)).
-        Die jährliche private Rente als Annuität ist
-        <span class="math-inline">
-          \(P_{\text{privat}} = K \cdot \dfrac{r}{1 - (1+r)^{-T_R}}\)
-        </span>.
-      </p>
-      <p class="sources-list" style="line-height:1.45%;">
-        Die private Ersatzrate ist dann
-      </p>
-      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
-        \[
-        \rho_{\text{privat}}
-        = \frac{P_{\text{privat}}}{\bar w}
-        = s \cdot
-          \frac{[(1+r)^{T_C} - 1]/r}
-               {1 - (1+r)^{-T_R}}.
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45%;">
-        Die Gesamt-Ersatzrate im Alter ergibt sich aus gesetzlicher und privater Säule:
-        <span class="math-inline">\(\rho_{\text{gesamt}} = \rho_{\text{gesetz}} + \rho_{\text{privat}}\)</span>.
-      </p>
-
-      <h3>Dynamisches Demografie-Modell mit Erwerbsmigration</h3>
-      <p class="sources-list" style="line-height:1.45%;">
-        Um nicht nur statische Zustände, sondern die Entwicklung des Systems zu untersuchen, wird das
-        Umlage-Modell mit einem einfachen <strong>dynamischen Demografie-Modell</strong> gekoppelt.
-        Ausgangspunkt sind die aktuellen Werte \(N_C(0)\), \(N_R(0)\) aus den Slidern. Für jedes Jahr
-        \(t = 0, 1, \dots, T-1\) gilt:
-      </p>
-      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
-        \[
-        \begin{aligned}
-          N_C(t+1) &= N_C(t)\bigl(1 + g_C\bigr) + M_{\text{mig}},\\[4pt]
-          N_R(t+1) &= N_R(t)\bigl(1 + g_R\bigr),\\[4pt]
-          q(t) &= \frac{N_R(t)}{N_C(t)}.
-        \end{aligned}
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45%;">
-        Für jedes Jahr \(t\) wird aus \(q(t)\) mit den gewählten politischen Parametern
-        \(\rho_{\text{gesetz}}, f, \gamma\) eine Folge von Beitragssätzen \(\tau(t)\),
-        Rentenausgaben \(A(t)\), Beitragseinnahmen \(B(t)\) und Steuerzuschüssen \(S(t)\) berechnet:
-      </p>
-      <div class="math-block" style="margin-left:auto; margin-right:auto; text-align:center; max-width:300px;">
-        \[
-        \begin{aligned}
-          \tau(t) &=
-            \frac{q(t)\,\rho_{\text{gesetz}} (1 - f)}
-                 {1 + \gamma\,q(t)},\\[4pt]
-          A(t) &= N_R(t)\,\rho_{\text{gesetz}}\,\bar w,\\[4pt]
-          B(t) &= \tau(t)\,\bar w\,\bigl(N_C(t) + \gamma N_R(t)\bigr),\\[4pt]
-          S(t) &= A(t) - B(t).
-        \end{aligned}
-        \]
-      </div>
-      <p class="sources-list" style="line-height:1.45%;">
-        Im Tool werden die Pfade \(q(t)\) und \(\tau(t)\) auf einem gemeinsamen Zeitdiagramm dargestellt
-        (linke bzw. rechte y-Achse). Im zweiten Diagramm werden die zugehörigen Geldflüsse
-        \(A(t)\), \(B(t)\) und \(S(t)\) in Mrd.&nbsp;€ gezeigt. Für das letzte Jahr \(T\) werden
-        \(q(T)\), \(\tau(T)\), \(A(T)\) und \(S(T)\) zusätzlich als Kennzahlen ausgegeben.
-      </p>
-
-      <h3>Konturdiagramm \(\tau(q,f)\)</h3>
-      <p class="sources-list" style="line-height:1.45%;">
-        Das Konturdiagramm zeigt den Beitragssatz \(\tau\) in Abhängigkeit vom Abhängigkeitsquotienten
-        \(q = N_R/N_C\) (x-Achse) und dem Steueranteil \(f\) (y-Achse) für das aktuell gewählte gesetzliche
-        Rentenniveau \(\rho_{\text{gesetz}}\) und die Aktivrente \(\gamma\).
-      </p>
-
-      <h3>Datengrundlagen der voreingestellten Szenarien</h3>
-      <p class="sources-list">
-        Die voreingestellten Werte sind gerundete, didaktisch vereinfachte Größen
-        und dienen der Illustration.
-      </p>
-      <div class="sources-list">
-        <ul>
-          <li><a href="https://jahresbericht.deutsche-rentenversicherung.de/" target="_blank" rel="noopener">Deutsche Rentenversicherung – Jahresbericht</a></li>
-          <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Experten/Statistiken-und-Berichte/Statistikpublikationen/statistikpublikationen_node.html" target="_blank" rel="noopener">„Rentenversicherung in Zahlen“</a></li>
-          <li><a href="https://www.destatis.de/DE/Themen/Querschnitt/Demografischer-Wandel/_inhalt.html" target="_blank" rel="noopener">Destatis – Demografischer Wandel</a></li>
-        </ul>
-      </div>
-      <p class="sources-list" style="margin-top:6px;">
-        Last update: 2025-11-18 · Author: Robert Flassig · MIT License · Created with AI-assisted coding
-      </p>
-    </section>
-  </div>
-
-  <script>
-    const fmtPct = (x) => (isFinite(x) ? x.toFixed(1) : "–");
-    const fmtBn  = (x) => (isFinite(x) ? x.toFixed(1) : "–");
-    const fmtRat = (x) => (isFinite(x) ? x.toFixed(3) : "–");
-    const fmtK   = (x) => (isFinite(x) ? x.toFixed(1) : "–");
-
-    const nc       = document.getElementById("nc");
-    const nr       = document.getElementById("nr");
-    const w        = document.getElementById("w");
-    const rho      = document.getElementById("rho");
-    const f        = document.getElementById("f");
-    const gamma    = document.getElementById("gamma");
-    const tauOv    = document.getElementById("tauOverride");
-
-    const sPriv    = document.getElementById("sPriv");
-    const rPriv    = document.getElementById("rPriv");
-    const TcPriv   = document.getElementById("TcPriv");
-    const TrPriv   = document.getElementById("TrPriv");
-
-    const ncLabel  = document.getElementById("ncLabel");
-    const nrLabel  = document.getElementById("nrLabel");
-    const wLabel   = document.getElementById("wLabel");
-    const rhoLabel = document.getElementById("rhoLabel");
-    const fLabel   = document.getElementById("fLabel");
-    const gammaLabel = document.getElementById("gammaLabel");
-    const tauOvLbl = document.getElementById("tauOverrideLabel");
-
-    const sPrivLabel  = document.getElementById("sPrivLabel");
-    const rPrivLabel  = document.getElementById("rPrivLabel");
-    const TcPrivLabel = document.getElementById("TcPrivLabel");
-    const TrPrivLabel = document.getElementById("TrPrivLabel");
-
-    const tauOut = document.getElementById("tauOut");
-    const fOut   = document.getElementById("fOut");
-    const AOut   = document.getElementById("AOut");
-    const BOut   = document.getElementById("BOut");
-    const SOut   = document.getElementById("SOut");
-    const qOut   = document.getElementById("qOut");
-
-    const rhoGesOut = document.getElementById("rhoGesOut");
-    const rhoPrivOut = document.getElementById("rhoPrivOut");
-    const rhoTotOut = document.getElementById("rhoTotOut");
-    const PprivOut  = document.getElementById("PprivOut");
-    const KprivOut  = document.getElementById("KprivOut");
-
-    const scenarioDescription = document.getElementById("scenarioDescription");
-    const scenarioMeta = document.getElementById("scenarioMeta");
-    const contourCanvas = document.getElementById("tauContour");
-    const exportChartBtn = document.getElementById("exportChartBtn");
-
-    const Tdyn     = document.getElementById("Tdyn");
-    const gCSlider = document.getElementById("gC");
-    const gRSlider = document.getElementById("gR");
-    const Mdyn     = document.getElementById("Mdyn");
-
-    const TdynLabel = document.getElementById("TdynLabel");
-    const gCLabel   = document.getElementById("gCLabel");
-    const gRLabel   = document.getElementById("gRLabel");
-    const MLabel    = document.getElementById("MLabel");
-
-    const qEndOut  = document.getElementById("qEndOut");
-    const tauEndOut = document.getElementById("tauEndOut");
-    const AEndOut  = document.getElementById("AEndOut");
-    const SEndOut  = document.getElementById("SEndOut");
-
-    const qDynCanvas = document.getElementById("qDynamics");
-    const flowCanvas = document.getElementById("flowDynamics");
-    const exportDynBtn = document.getElementById("exportDynBtn");
-
-    const scenarioTexts = {
-      statusQuoDE: {
-        title: "Status quo (2024)",
-        year: "2024",
-        desc: "Heutige Größenordnung: ca. 40 Mio. Beitragszahler, 21 Mio. Rentner, Durchschnittslohn 50 k€, gesetzliches Rentenniveau 48 %, Steueranteil 30 %, geringe Aktivrente und moderate private Vorsorge."
-      },
-      rentenpaket: {
-        title: "Rentenpaket: Haltelinie 48 % (bis 2031)",
-        year: "2031",
-        desc: "Haltelinie beim Rentenniveau, höherer Steueranteil und leicht veränderte Demografie."
-      },
-      demography2035: {
-        title: "Demografie 2035 ohne Reform",
-        year: "2035",
-        desc: "Ungünstigere Altersstruktur, kaum zusätzliche Aktivrente oder Migration."
-      },
-      laterRetirement: {
-        title: "Reform: späterer Rentenbeginn / Aktivrente",
-        year: "ca. 2035+",
-        desc: "Mehr Erwerbsbeteiligung Älterer und etwas höhere Erwerbsmigration."
-      },
-      boomerSoli: {
-        title: "„Boomer-Soli“: höherer Steueranteil",
-        year: "2030er",
-        desc: "Starker Steuerzuschuss, Beitragssatz politisch gedeckelt."
-      },
-      lowBenefit: {
-        title: "Rentenmix: niedriges gesetzliches Niveau + hohe private Vorsorge",
-        year: "theoretisch",
-        desc: "Stärkere Verlagerung auf private Säule, geringeres gesetzliches Niveau."
-      },
-      noTaxes: {
-        title: "Radikal: keine Steuerfinanzierung f = 0",
-        year: "theoretisch",
-        desc: "Alle Renten rein beitragsfinanziert, hoher demografischer Druck."
-      },
-      maxTaxes: {
-        title: "Radikal: hohe Steuerfinanzierung f = 60 %",
-        year: "theoretisch",
-        desc: "Großer Steuerzuschuss, niedriger Beitragssatz, hohe Staatslast."
-      }
-    };
-
-    function applyScenario(name) {
-      if (name === "statusQuoDE") {
-        nc.value = 40;
-        nr.value = 21;
-        w.value = 50;
-        rho.value = 48;
-        f.value = 30;
-        gamma.value = 2;
-        tauOv.value = "";
-        sPriv.value = 5;
-        rPriv.value = 2;
-        TcPriv.value = 40;
-        TrPriv.value = 20;
-
-        Tdyn.value = 20;
-        gCSlider.value = 0.0;
-        gRSlider.value = 1.2;
-        Mdyn.value = 0.3;
-      } else if (name === "rentenpaket") {
-        nc.value = 38;
-        nr.value = 22;
-        w.value = 51;
-        rho.value = 48;
-        f.value = 35;
-        gamma.value = 3;
-        tauOv.value = "";
-        sPriv.value = 6;
-        rPriv.value = 2;
-        TcPriv.value = 40;
-        TrPriv.value = 20;
-
-        Tdyn.value = 20;
-        gCSlider.value = -0.2;
-        gRSlider.value = 1.3;
-        Mdyn.value = 0.3;
-      } else if (name === "demography2035") {
-        nc.value = 40;
-        nr.value = 20;
-        w.value = 52;
-        rho.value = 48;
-        f.value = 30;
-        gamma.value = 2;
-        tauOv.value = "";
-        sPriv.value = 5;
-        rPriv.value = 2;
-        TcPriv.value = 40;
-        TrPriv.value = 20;
-
-        Tdyn.value = 20;
-        gCSlider.value = -0.3;
-        gRSlider.value = 1.5;
-        Mdyn.value = 0.1;
-      } else if (name === "laterRetirement") {
-        nc.value = 42;
-        nr.value = 18;
-        w.value = 52;
-        rho.value = 48;
-        f.value = 30;
-        gamma.value = 6;
-        tauOv.value = "";
-        sPriv.value = 6;
-        rPriv.value = 2.5;
-        TcPriv.value = 42;
-        TrPriv.value = 18;
-
-        Tdyn.value = 20;
-        gCSlider.value = 0.2;
-        gRSlider.value = 1.0;
-        Mdyn.value = 0.4;
-      } else if (name === "boomerSoli") {
-        nc.value = 40;
-        nr.value = 21;
-        w.value = 50;
-        rho.value = 48;
-        f.value = 40;
-        gamma.value = 3;
-        tauOv.value = 18.0;
-        sPriv.value = 5;
-        rPriv.value = 2;
-        TcPriv.value = 40;
-        TrPriv.value = 20;
-
-        Tdyn.value = 20;
-        gCSlider.value = -0.2;
-        gRSlider.value = 1.3;
-        Mdyn.value = 0.2;
-      } else if (name === "lowBenefit") {
-        nc.value = 40;
-        nr.value = 21;
-        w.value = 50;
-        rho.value = 35;
-        f.value = 30;
-        gamma.value = 2;
-        tauOv.value = "";
-        sPriv.value = 10;
-        rPriv.value = 3;
-        TcPriv.value = 40;
-        TrPriv.value = 20;
-
-        Tdyn.value = 20;
-        gCSlider.value = 0.0;
-        gRSlider.value = 1.2;
-        Mdyn.value = 0.3;
-      } else if (name === "noTaxes") {
-        nc.value = 40;
-        nr.value = 21;
-        w.value = 50;
-        rho.value = 48;
-        f.value = 0;
-        gamma.value = 2;
-        tauOv.value = "";
-        sPriv.value = 5;
-        rPriv.value = 2;
-        TcPriv.value = 40;
-        TrPriv.value = 20;
-
-        Tdyn.value = 20;
-        gCSlider.value = -0.3;
-        gRSlider.value = 1.4;
-        Mdyn.value = 0.3;
-      } else if (name === "maxTaxes") {
-        nc.value = 40;
-        nr.value = 21;
-        w.value = 50;
-        rho.value = 48;
-        f.value = 60;
-        gamma.value = 2;
-        tauOv.value = 15.0;
-        sPriv.value = 5;
-        rPriv.value = 2;
-        TcPriv.value = 40;
-        TrPriv.value = 20;
-
-        Tdyn.value = 20;
-        gCSlider.value = -0.1;
-        gRSlider.value = 1.3;
-        Mdyn.value = 0.3;
-      }
-
-      const meta = scenarioTexts[name];
-      if (meta) {
-        scenarioMeta.textContent = `Szenario: ${meta.title} (Jahr: ${meta.year})`;
-        scenarioDescription.textContent = meta.desc;
-      } else {
-        scenarioMeta.textContent = "";
-        scenarioDescription.textContent = "";
-      }
-      update();
-    }
-
-    function drawContour() {
-      const ctx = contourCanvas.getContext("2d");
-      const width = contourCanvas.clientWidth;
-      const height = contourCanvas.clientHeight;
-      contourCanvas.width = width * window.devicePixelRatio;
-      contourCanvas.height = height * window.devicePixelRatio;
-      ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
-
-      ctx.clearRect(0, 0, width, height);
-
-      const paddingLeft = 55;
-      const paddingRight = 70;
-      const paddingTop = 20;
-      const paddingBottom = 35;
-
-      const plotW = width - paddingLeft - paddingRight;
-      const plotH = height - paddingTop - paddingBottom;
-      if (plotW <= 0 || plotH <= 0) return;
-
-      const rhoLawPct = Number(rho.value);
-      const rhoLawDec = rhoLawPct / 100;
-      const fSliderPct = Number(f.value);
-      const fCurr = fSliderPct / 100;
-
-      const NC = Number(nc.value);
-      const NR = Number(nr.value);
-      const qCurr = NR / NC;
-
-      const gammaDec = Number(gamma.value) / 100;
-
-      const tauOverrideVal = tauOv.value === "" ? null : Number(tauOv.value);
-      const useTauOv = tauOverrideVal !== null && !Number.isNaN(tauOverrideVal);
-
-      const nx = 90;
-      const ny = 90;
-
-      let minTau = Infinity;
-      let maxTau = -Infinity;
-      const grid = [];
-
-      const qSpan = 0.8;
-      let qMin = Math.max(0.1, qCurr - qSpan / 2);
-      let qMax = qMin + qSpan;
-
-      const fSpan = 0.6;
-      let fMin = Math.max(0.0, fCurr - fSpan / 2);
-      let fMax = Math.min(0.8, fMin + fSpan);
-      if (fMax - fMin < 0.2) {
-        fMax = Math.min(0.8, fMin + 0.2);
-      }
-
-      for (let iy = 0; iy < ny; iy++) {
-        const fVal = fMin + (iy / (ny - 1)) * (fMax - fMin);
-        const row = [];
-        for (let ix = 0; ix < nx; ix++) {
-          const qVal = qMin + (ix / (nx - 1)) * (qMax - qMin);
-          const tauDec = (qVal * rhoLawDec * (1 - fVal)) / (1 + gammaDec * qVal);
-          const tauPct = tauDec * 100;
-          row.push(tauPct);
-          if (tauPct < minTau) minTau = tauPct;
-          if (tauPct > maxTau) maxTau = tauPct;
-        }
-        grid.push(row);
-      }
-
-      if (!isFinite(minTau) || !isFinite(maxTau) || maxTau <= minTau) {
-        minTau = 0;
-        maxTau = 30;
-      }
-
-      for (let iy = 0; iy < ny - 1; iy++) {
-        const fVal0 = fMin + (iy / (ny - 1)) * (fMax - fMin);
-        const fVal1 = fMin + ((iy + 1) / (ny - 1)) * (fMax - fMin);
-        const y0 = paddingTop + (1 - (fVal0 - fMin) / (fMax - fMin)) * plotH;
-        const y1 = paddingTop + (1 - (fVal1 - fMin) / (fMax - fMin)) * plotH;
-        const cellH = y1 - y0;
-
-        for (let ix = 0; ix < nx - 1; ix++) {
-          const qVal0 = qMin + (ix / (nx - 1)) * (qMax - qMin);
-          const qVal1 = qMin + ((ix + 1) / (nx - 1)) * (qMax - qMin);
-          const x0 = paddingLeft + ((qVal0 - qMin) / (qMax - qMin)) * plotW;
-          const x1 = paddingLeft + ((qVal1 - qMin) / (qMax - qMin)) * plotW;
-          const cellW = x1 - x0;
-
-          const tauCell = grid[iy][ix];
-          const norm = (tauCell - minTau) / (maxTau - minTau);
-          const h = (1 - norm) * 240;
-          ctx.fillStyle = `hsl(${h}, 80%, 50%)`;
-          ctx.fillRect(x0, y1, cellW, -cellH);
-        }
-      }
-
-      ctx.strokeStyle = "rgba(148,163,184,0.8)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(paddingLeft, paddingTop);
-      ctx.lineTo(paddingLeft, paddingTop + plotH);
-      ctx.lineTo(paddingLeft + plotW, paddingTop + plotH);
-      ctx.stroke();
-
-      ctx.fillStyle = "rgba(148,163,184,0.9)";
-      ctx.font = "10px system-ui";
-
-      const qTicks = 4;
-      for (let i = 0; i <= qTicks; i++) {
-        const t = i / qTicks;
-        const qVal = qMin + t * (qMax - qMin);
-        const x = paddingLeft + t * plotW;
-        const y = paddingTop + plotH;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x, y + 4);
-        ctx.stroke();
-        ctx.fillText(qVal.toFixed(2), x - 10, y + 14);
-      }
-      ctx.fillText("q = N_R / N_C", paddingLeft + plotW / 2 - 25, paddingTop + plotH + 26);
-
-      const fTicks = 4;
-      for (let i = 0; i <= fTicks; i++) {
-        const t = i / fTicks;
-        const fVal = fMin + t * (fMax - fMin);
-        const y = paddingTop + (1 - t) * plotH;
-        const x = paddingLeft;
-        ctx.beginPath();
-        ctx.moveTo(x - 4, y);
-        ctx.lineTo(x, y);
-        ctx.stroke();
-        ctx.fillText((fVal * 100).toFixed(0) + "%", x - 32, y + 3);
-      }
-      ctx.save();
-      ctx.translate(paddingLeft - 38, paddingTop + plotH / 2 + 15);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillText("Steueranteil f", 0, 0);
-      ctx.restore();
-
-      const legendX = paddingLeft + plotW + 8;
-      const legendY = paddingTop;
-      const legendH = plotH;
-      const legendW = 12;
-
-      for (let i = 0; i < legendH; i++) {
-        const t = i / (legendH - 1);
-        const tauVal = maxTau - t * (maxTau - minTau);
-        const norm = (tauVal - minTau) / (maxTau - minTau);
-        const h = (1 - norm) * 240;
-        ctx.fillStyle = `hsl(${h}, 80%, 50%)`;
-        ctx.fillRect(legendX, legendY + i, legendW, 1);
-      }
-      ctx.strokeStyle = "rgba(148,163,184,0.8)";
-      ctx.strokeRect(legendX, legendY, legendW, legendH);
-
-      ctx.fillStyle = "rgba(148,163,184,0.9)";
-      const tauTicks = 4;
-      for (let i = 0; i <= tauTicks; i++) {
-        const t = i / tauTicks;
-        const y = legendY + t * legendH;
-        const tauVal = maxTau - t * (maxTau - minTau);
-        ctx.beginPath();
-        ctx.moveTo(legendX + legendW, y);
-        ctx.lineTo(legendX + legendW + 3, y);
-        ctx.stroke();
-        ctx.fillText(tauVal.toFixed(1) + "%", legendX + legendW + 6, y + 3);
-      }
-      ctx.fillText("τ", legendX + legendW + 6, legendY - 10);
-
-      const legendPointY = legendY + legendH + 16;
-      const legendPointX = legendX;
-      ctx.beginPath();
-      ctx.arc(legendPointX + 6, legendPointY, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(0,0,0,0.8)";
-      ctx.stroke();
-      ctx.fillStyle = "rgba(148,163,184,0.9)";
-      ctx.fillText("(q, f)", legendPointX + 16, legendPointY + 3);
-
-      const tauLevels = [];
-      const nIso = 5;
-      for (let i = 1; i <= nIso; i++) {
-        const frac = i / (nIso + 1);
-        const val = minTau + frac * (maxTau - minTau);
-        tauLevels.push(val);
-      }
-
-      ctx.lineWidth = 1;
-      tauLevels.forEach((tauLevel, idx) => {
-        const tauDecLevel = tauLevel / 100;
-        ctx.beginPath();
-        let started = false;
-        const steps = 200;
-        const gray = 200 + idx * 10;
-        ctx.strokeStyle = `rgba(${gray},${gray},${gray},0.8)`;
-        for (let i = 0; i <= steps; i++) {
-          const qVal = qMin + (i / steps) * (qMax - qMin);
-          const denom = qVal * rhoLawDec;
-          if (denom <= 0) continue;
-          let fVal = 1 - (tauDecLevel * (1 + gammaDec * qVal)) / denom;
-          if (fVal < fMin || fVal > fMax) {
-            started = false;
-            continue;
-          }
-          const x = paddingLeft + ((qVal - qMin) / (qMax - qMin)) * plotW;
-          const y = paddingTop + (1 - (fVal - fMin) / (fMax - fMin)) * plotH;
-          if (!started) {
-            ctx.moveTo(x, y);
-            started = true;
-          } else {
-            ctx.lineTo(x, y);
-          }
-        }
-        ctx.stroke();
-      });
-
-      const rhoLawDecSafe = rhoLawDec;
-      if (useTauOv && rhoLawDecSafe > 0) {
-        const tauDecOv = tauOverrideVal / 100;
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        let started = false;
-        const steps = 300;
-        for (let i = 0; i <= steps; i++) {
-          const qVal = qMin + (i / steps) * (qMax - qMin);
-          const denom = qVal * rhoLawDecSafe;
-          if (denom <= 0) continue;
-          let fVal = 1 - (tauDecOv * (1 + gammaDec * qVal)) / denom;
-          if (fVal < fMin || fVal > fMax) {
-            started = false;
-            continue;
-          }
-          const x = paddingLeft + ((qVal - qMin) / (qMax - qMin)) * plotW;
-          const y = paddingTop + (1 - (fVal - fMin) / (fMax - fMin)) * plotH;
-          if (!started) {
-            ctx.moveTo(x, y);
-            started = true;
-          } else {
-            ctx.lineTo(x, y);
-          }
-        }
-        ctx.stroke();
-      }
-
-      if (qCurr >= qMin && qCurr <= qMax && fCurr >= fMin && fCurr <= fMax) {
-        const xP = paddingLeft + ((qCurr - qMin) / (qMax - qMin)) * plotW;
-        const yP = paddingTop + (1 - (fCurr - fMin) / (fMax - fMin)) * plotH;
-        ctx.beginPath();
-        ctx.arc(xP, yP, 6, 0, 2 * Math.PI);
-        ctx.fillStyle = "rgba(0,0,0,0.6)";
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(xP, yP, 4, 0, 2 * Math.PI);
-        ctx.fillStyle = "#ffffff";
-        ctx.fill();
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = "rgba(0,0,0,0.8)";
-        ctx.stroke();
-      }
-    }
-
-    function drawDynamicsChart(times, qSeries, tauSeries) {
-      const ctx = qDynCanvas.getContext("2d");
-      const width = qDynCanvas.clientWidth;
-      const height = qDynCanvas.clientHeight;
-      qDynCanvas.width = width * window.devicePixelRatio;
-      qDynCanvas.height = height * window.devicePixelRatio;
-      ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
-
-      ctx.clearRect(0, 0, width, height);
-
-      if (!times.length) return;
-
-      const paddingLeft = 45;
-      const paddingRight = 45;
-      const paddingTop = 20;
-      const paddingBottom = 30;
-
-      const plotW = width - paddingLeft - paddingRight;
-      const plotH = height - paddingTop - paddingBottom;
-      if (plotW <= 0 || plotH <= 0) return;
-
-      const validIdx = times
-        .map((_, i) => i)
-        .filter(i => isFinite(qSeries[i]) && isFinite(tauSeries[i]));
-      if (!validIdx.length) return;
-
-      const qVals = validIdx.map(i => qSeries[i]);
-      const tauVals = validIdx.map(i => tauSeries[i]);
-
-      let minQ = Math.min(...qVals);
-      let maxQ = Math.max(...qVals);
-      if (!isFinite(minQ) || !isFinite(maxQ)) return;
-
-      let qRange = maxQ - minQ;
-      if (qRange <= 0) qRange = Math.max(Math.abs(minQ), 0.1) * 0.2;
-      const qPad = qRange * 0.15;
-      const minQPlot = Math.max(0, minQ - qPad);
-      const maxQPlot = maxQ + qPad;
-
-      let minTau = Math.min(...tauVals);
-      let maxTau = Math.max(...tauVals);
-      if (!isFinite(minTau) || !isFinite(maxTau)) {
-        minTau = 0;
-        maxTau = 30;
-      }
-      let tauRange = maxTau - minTau;
-      if (tauRange <= 0) tauRange = Math.max(Math.abs(minTau), 5) * 0.3;
-      const tauPad = tauRange * 0.15;
-      const minTauPlot = Math.max(0, minTau - tauPad);
-      const maxTauPlot = maxTau + tauPad;
-
-      const T = times[times.length - 1];
-
-      ctx.strokeStyle = "rgba(148,163,184,0.8)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(paddingLeft, paddingTop);
-      ctx.lineTo(paddingLeft, paddingTop + plotH);
-      ctx.lineTo(paddingLeft + plotW, paddingTop + plotH);
-      ctx.stroke();
-
-      ctx.fillStyle = "rgba(148,163,184,0.9)";
-      ctx.font = "10px system-ui";
-
-      const xTicks = Math.min(5, T || 1);
-      for (let i = 0; i <= xTicks; i++) {
-        const tVal = (T * i) / xTicks;
-        const x = paddingLeft + (T === 0 ? 0 : (tVal / T) * plotW);
-        const y = paddingTop + plotH;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x, y + 4);
-        ctx.stroke();
-        ctx.fillText(tVal.toFixed(0), x - 4, y + 14);
-      }
-      ctx.fillText("Jahre", paddingLeft + plotW / 2 - 15, paddingTop + plotH + 26);
-
-      const yTicks = 4;
-      for (let i = 0; i <= yTicks; i++) {
-        const frac = i / yTicks;
-        const qVal = minQPlot + (1 - frac) * (maxQPlot - minQPlot);
-        const y = paddingTop + frac * plotH;
-        ctx.beginPath();
-        ctx.moveTo(paddingLeft - 4, y);
-        ctx.lineTo(paddingLeft, y);
-        ctx.stroke();
-        ctx.fillText(qVal.toFixed(2), paddingLeft - 34, y + 3);
-      }
-      ctx.save();
-      ctx.translate(paddingLeft - 40, paddingTop + plotH / 2 + 10);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillText("q(t) = N_R/N_C", 0, 0);
-      ctx.restore();
-
-      for (let i = 0; i <= yTicks; i++) {
-        const frac = i / yTicks;
-        const tauVal = minTauPlot + (1 - frac) * (maxTauPlot - minTauPlot);
-        const y = paddingTop + frac * plotH;
-        const x = paddingLeft + plotW;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + 4, y);
-        ctx.stroke();
-        ctx.fillText(tauVal.toFixed(1) + "%", x + 6, y + 3);
-      }
-      ctx.save();
-      ctx.translate(paddingLeft + plotW + 38, paddingTop + plotH / 2 + 10);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillText("τ(t) [%]", 0, 0);
-      ctx.restore();
-
-      const xOf = (t) => paddingLeft + (T === 0 ? 0 : (t / T) * plotW);
-      const yOfQ = (q) =>
-        paddingTop + ((maxQPlot - q) / (maxQPlot - minQPlot)) * plotH;
-      const yOfTau = (tau) =>
-        paddingTop + ((maxTauPlot - tau) / (maxTauPlot - minTauPlot)) * plotH;
-
-      ctx.beginPath();
-      validIdx.forEach((i, k) => {
-        const t = times[i];
-        const tau = tauSeries[i];
-        const x = xOf(t);
-        const y = yOfTau(tau);
-        if (k === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = "rgba(250,204,21,0.9)";
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
-
-      ctx.beginPath();
-      validIdx.forEach((i, k) => {
-        const t = times[i];
-        const q = qSeries[i];
-        const x = xOf(t);
-        const y = yOfQ(q);
-        if (k === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = "rgba(56,189,248,0.95)";
-      ctx.lineWidth = 2.2;
-      ctx.stroke();
-
-      const lastIdx = validIdx[validIdx.length - 1];
-      const xLast = xOf(times[lastIdx]);
-      const qLast = qSeries[lastIdx];
-      const tauLast = tauSeries[lastIdx];
-      const yLastQ = yOfQ(qLast);
-      const yLastTau = yOfTau(tauLast);
-
-      ctx.beginPath();
-      ctx.arc(xLast, yLastQ, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(56,189,248,0.9)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(xLast, yLastTau, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(250,204,21,0.9)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-    }
-
-    function drawFlowChart(times, ASeriesBn, BSeriesBn, SSeriesBn) {
-      const ctx = flowCanvas.getContext("2d");
-      const width = flowCanvas.clientWidth;
-      const height = flowCanvas.clientHeight;
-      flowCanvas.width = width * window.devicePixelRatio;
-      flowCanvas.height = height * window.devicePixelRatio;
-      ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
-
-      ctx.clearRect(0, 0, width, height);
-      if (!times.length) return;
-
-      const paddingLeft = 55;
-      const paddingRight = 20;
-      const paddingTop = 20;
-      const paddingBottom = 30;
-
-      const plotW = width - paddingLeft - paddingRight;
-      const plotH = height - paddingTop - paddingBottom;
-      if (plotW <= 0 || plotH <= 0) return;
-
-      const vals = [...ASeriesBn, ...BSeriesBn, ...SSeriesBn].filter(v => isFinite(v));
-      if (!vals.length) return;
-
-      let minY = 0;
-      let maxY = Math.max(...vals);
-      if (!isFinite(maxY)) return;
-      if (maxY <= 0) maxY = 1;
-
-      const yRange = maxY - minY || maxY;
-      const yPad = yRange * 0.1;
-      minY = Math.max(0, minY - yPad);
-      maxY = maxY + yPad;
-
-      const T = times[times.length - 1];
-
-      ctx.strokeStyle = "rgba(148,163,184,0.8)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(paddingLeft, paddingTop);
-      ctx.lineTo(paddingLeft, paddingTop + plotH);
-      ctx.lineTo(paddingLeft + plotW, paddingTop + plotH);
-      ctx.stroke();
-
-      ctx.fillStyle = "rgba(148,163,184,0.9)";
-      ctx.font = "10px system-ui";
-
-      const xTicks = Math.min(5, T || 1);
-      for (let i = 0; i <= xTicks; i++) {
-        const tVal = (T * i) / xTicks;
-        const x = paddingLeft + (T === 0 ? 0 : (tVal / T) * plotW);
-        const y = paddingTop + plotH;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x, y + 4);
-        ctx.stroke();
-        ctx.fillText(tVal.toFixed(0), x - 4, y + 14);
-      }
-      ctx.fillText("Jahre", paddingLeft + plotW / 2 - 15, paddingTop + plotH + 26);
-
-      const yTicks = 4;
-      for (let i = 0; i <= yTicks; i++) {
-        const frac = i / yTicks;
-        const val = minY + (1 - frac) * (maxY - minY);
-        const y = paddingTop + frac * plotH;
-        ctx.beginPath();
-        ctx.moveTo(paddingLeft - 4, y);
-        ctx.lineTo(paddingLeft, y);
-        ctx.stroke();
-        ctx.fillText(val.toFixed(0), paddingLeft - 34, y + 3);
-      }
-      ctx.save();
-      ctx.translate(paddingLeft - 42, paddingTop + plotH / 2 + 10);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillText("Mrd. €", 0, 0);
-      ctx.restore();
-
-      const xOf = (t) => paddingLeft + (T === 0 ? 0 : (t / T) * plotW);
-      const yOf = (val) =>
-        paddingTop + ((maxY - val) / (maxY - minY)) * plotH;
-
-      function drawSeries(series, color, widthLine) {
-        ctx.beginPath();
-        series.forEach((val, i) => {
-          if (!isFinite(val)) return;
-          const x = xOf(times[i]);
-          const y = yOf(val);
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
-        ctx.strokeStyle = color;
-        ctx.lineWidth = widthLine;
-        ctx.stroke();
-      }
-
-      // A(t), B(t), S(t)
-      drawSeries(ASeriesBn, "rgba(56,189,248,0.95)", 2.0);   // A
-      drawSeries(BSeriesBn, "rgba(34,197,94,0.95)", 1.8);    // B
-      drawSeries(SSeriesBn, "rgba(248,113,113,0.95)", 1.8);  // S
-
-      // Endpunkt-Markierungen (optional nur für A)
-      const lastIdx = times.length - 1;
-      const xLast = xOf(times[lastIdx]);
-      const yLastA = yOf(ASeriesBn[lastIdx]);
-      ctx.beginPath();
-      ctx.arc(xLast, yLastA, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(56,189,248,0.95)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-    }
-
-    function updateDynamics(NC0, NR0, W, rhoDec, fDec, gammaDec) {
-      const T = Number(Tdyn.value);
-      const gC = Number(gCSlider.value) / 100;
-      const gR = Number(gRSlider.value) / 100;
-      const M = Number(Mdyn.value);
-
-      TdynLabel.textContent = T.toFixed(0) + " a";
-      gCLabel.textContent   = (gC * 100).toFixed(1) + " %";
-      gRLabel.textContent   = (gR * 100).toFixed(1) + " %";
-      MLabel.textContent    = M.toFixed(2) + " Mio/a";
-
-      let NC = NC0;
-      let NR = NR0;
-
-      const times = [];
-      const qSeries = [];
-      const tauSeries = [];
-      const ASeriesBn = [];
-      const BSeriesBn = [];
-      const SSeriesBn = [];
-
-      let AEnd_bn = NaN;
-      let SEnd_bn = NaN;
-      let tauEndPct = NaN;
-      let qEnd = NaN;
-
-      for (let t = 0; t <= T; t++) {
-        const q = NR / NC;
-        const L = (NC + gammaDec * NR) * 1e6 * W;
-        const A = NR * 1e6 * rhoDec * W;
-        const tauDec = (q * rhoDec * (1 - fDec)) / (1 + gammaDec * q);
-        const B = tauDec * L;
-        const S = A - B;
-
-        const A_bn = A / 1e9;
-        const B_bn = B / 1e9;
-        const S_bn = S / 1e9;
-        const tauPct = tauDec * 100;
-
-        times.push(t);
-        qSeries.push(q);
-        tauSeries.push(tauPct);
-        ASeriesBn.push(A_bn);
-        BSeriesBn.push(B_bn);
-        SSeriesBn.push(S_bn);
-
-        if (t === T) {
-          AEnd_bn = A_bn;
-          SEnd_bn = S_bn;
-          tauEndPct = tauPct;
-          qEnd = q;
-        }
-
-        NC = NC * (1 + gC) + M;
-        NR = NR * (1 + gR);
-      }
-
-      drawDynamicsChart(times, qSeries, tauSeries);
-      drawFlowChart(times, ASeriesBn, BSeriesBn, SSeriesBn);
-
-      qEndOut.textContent   = fmtRat(qEnd);
-      tauEndOut.textContent = fmtPct(tauEndPct);
-      AEndOut.textContent   = fmtBn(AEnd_bn);
-      SEndOut.textContent   = fmtBn(SEnd_bn);
-    }
-
-    function update() {
-      const NC = Number(nc.value);
-      const NR = Number(nr.value);
-      const Wk = Number(w.value);
-      const rhoPct = Number(rho.value);
-      const fPct   = Number(f.value);
-      const gammaPct = Number(gamma.value);
-
-      const W = Wk * 1000;
-      const q  = NR / NC;
-      const rhoDec = rhoPct / 100;
-      const fDec   = fPct / 100;
-      const gammaDec = gammaPct / 100;
-
-      const sDec = Number(sPriv.value) / 100;
-      const rDec = Number(rPriv.value) / 100;
-      const Tc = Number(TcPriv.value);
-      const Tr = Number(TrPriv.value);
-
-      let rhoPrivDec = 0;
-      let K = 0;
-      let Ppriv = 0;
-
-      if (sDec > 0 && Tc > 0 && Tr > 0) {
-        if (rDec > 0) {
-          const num = Math.pow(1 + rDec, Tc) - 1;
-          const den = 1 - Math.pow(1 + rDec, -Tr);
-          if (den > 0) {
-            const factor = num / den;
-            rhoPrivDec = sDec * factor;
-            K = sDec * W * ((Math.pow(1 + rDec, Tc) - 1) / rDec);
-            Ppriv = K * (rDec / (1 - Math.pow(1 + rDec, -Tr)));
-          }
-        } else {
-          K = sDec * W * Tc;
-          Ppriv = K / Tr;
-          rhoPrivDec = Ppriv / W;
-        }
-      }
-
-      const rhoPrivPct = rhoPrivDec * 100;
-      const rhoTotPct = (rhoDec + rhoPrivDec) * 100;
-
-      const L = (NC + gammaDec * NR) * 1e6 * W;
-
-      const A = NR * 1e6 * rhoDec * W;
-      const tauDec_model = (q * rhoDec * (1 - fDec)) / (1 + gammaDec * q);
-      const tauPct_model = tauDec_model * 100;
-
-      const tauOverrideVal = tauOv.value === "" ? null : Number(tauOv.value);
-      const useTauOv = tauOverrideVal !== null && !Number.isNaN(tauOverrideVal);
-
-      let B_actual = tauDec_model * L;
-      let S_actual = A - B_actual;
-      let fImplPct = fPct;
-
-      if (useTauOv) {
-        const tauOvDec = tauOverrideVal / 100;
-        B_actual = tauOvDec * L;
-        S_actual = A - B_actual;
-        const fImpl = S_actual / A;
-        fImplPct = fImpl * 100;
-      }
-
-      const A_bn = A / 1e9;
-      const B_bn = B_actual / 1e9;
-      const S_bn = S_actual / 1e9;
-
-      ncLabel.textContent  = NC + " Mio";
-      nrLabel.textContent  = NR + " Mio";
-      wLabel.textContent   = Wk.toFixed(0) + " k€";
-      rhoLabel.textContent = rhoPct.toFixed(0) + " %";
-      fLabel.textContent   = fPct.toFixed(0) + " %";
-      gammaLabel.textContent = gammaPct.toFixed(0) + " %";
-      tauOvLbl.textContent = useTauOv ? tauOverrideVal.toFixed(1) + " %" : "auto";
-
-      sPrivLabel.textContent  = (sDec * 100).toFixed(0) + " %";
-      rPrivLabel.textContent  = (rDec * 100).toFixed(2) + " %";
-      TcPrivLabel.textContent = Tc.toFixed(0) + " a";
-      TrPrivLabel.textContent = Tr.toFixed(0) + " a";
-
-      tauOut.textContent = fmtPct(tauPct_model);
-      fOut.textContent   = useTauOv ? fmtPct(fImplPct) : fmtPct(fPct);
-      AOut.textContent   = fmtBn(A_bn);
-      BOut.textContent   = fmtBn(B_bn);
-      SOut.textContent   = fmtBn(S_bn);
-      qOut.textContent   = fmtRat(q);
-
-      rhoGesOut.textContent  = fmtPct(rhoPct);
-      rhoPrivOut.textContent = fmtPct(rhoPrivPct);
-      rhoTotOut.textContent  = fmtPct(rhoTotPct);
-
-      PprivOut.textContent   = fmtK(Ppriv / 1000);
-      KprivOut.textContent   = fmtK(K / 1000);
-
-      drawContour();
-      updateDynamics(NC, NR, W, rhoDec, fDec, gammaDec);
-    }
-
-    [
-      nc, nr, w, rho, f, gamma, tauOv,
-      sPriv, rPriv, TcPriv, TrPriv,
-      Tdyn, gCSlider, gRSlider, Mdyn
-    ].forEach(el => {
-      el.addEventListener("input", update);
-      el.addEventListener("change", update);
-    });
-
-    document.querySelectorAll(".scenario-btn").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        const scenario = e.target.getAttribute("data-scenario");
-        document.querySelectorAll(".scenario-btn").forEach(b => b.classList.remove("primary"));
-        e.target.classList.add("primary");
-        applyScenario(scenario);
-      });
-    });
-
-    if (exportChartBtn) {
-      exportChartBtn.addEventListener("click", () => {
-        const url = contourCanvas.toDataURL("image/png");
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "rentenmodell_contour.png";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      });
-    }
-
-    if (exportDynBtn) {
-      exportDynBtn.addEventListener("click", () => {
-        const url = qDynCanvas.toDataURL("image/png");
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "rentenmodell_dynamik_q_tau.png";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      });
-    }
-
-    // Start mit Status-quo-Szenario
-    applyScenario("statusQuoDE");
-  </script>
-</body>
-</html>
+      <div class="math-block
