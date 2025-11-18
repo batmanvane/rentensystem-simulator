@@ -28,7 +28,7 @@
       --card: #111827;
       --muted: #9ca3af;
       --spd: #E3000F;
-      --cdu: #000000;
+      --cdu: #0f172a;
       --gruene: #64A12D;
       --afd: #009EE0;
       --linke: #BE3075;
@@ -1437,12 +1437,12 @@
         card.innerHTML = `
           <div class="party-name" style="color: ${party.color}">${party.name}</div>
           <div class="party-seats">${party.seats} Sitze (${seatPct}%)</div>
-          <div class="party-pref">\\(\\tau^*\\): ${party.preferences.tau}\\%</div>
-          <div class="party-pref">\\(\\rho^*\\): ${party.preferences.rho}\\%</div>
-          <div class="party-pref">\\(f^*\\): ${party.preferences.f}\\%</div>
-          <div class="party-pref">\\(M^*_{\\text{mig}}\\): ${party.preferences.mmig} \\text{ Mio/a}\\)</div>
+          <div class="party-pref">\\(\\tau^*: ${party.preferences.tau}\,\\%\\)</div>
+          <div class="party-pref">\\(\\rho^*: ${party.preferences.rho}\,\\%\\)</div>
+          <div class="party-pref">\\(f^*: ${party.preferences.f}\,\\%\\)</div>
+          <div class="party-pref">\\(M^*_{\\text{mig}}: ${party.preferences.mmig} \\text{ Mio/a}\\)</div>
           <div class="party-pref">
-            \\((w_\\tau, w_\\rho, w_f, w_M) = (${party.weights.tau}, ${party.weights.rho}, ${party.weights.f}, ${party.weights.mmig})\\)
+            \\((w_\\tau, w_\\rho, w_f, w_M) =<br>(${party.weights.tau}, ${party.weights.rho}, ${party.weights.f}, ${party.weights.mmig})\\)
           </div>
         `;
 
