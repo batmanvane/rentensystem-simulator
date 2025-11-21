@@ -3,27 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>LBM Droplet UX</title>
+    <title>LBM Particle Collector</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Segoe UI', sans-serif; }
+        
+        /* UI Overlay */
         #overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; justify-content: center; align-items: center;
-            background: rgba(0,0,0,0.6); color: white; z-index: 10;
-            flex-direction: column; text-align: center; backdrop-filter: blur(5px);
+            background: rgba(0,0,0,0.7); color: white; z-index: 10;
+            flex-direction: column; text-align: center; backdrop-filter: blur(8px);
+            transition: opacity 0.5s;
         }
-        h1 { margin-bottom: 5px; font-weight: 300; letter-spacing: 2px; }
-        p { color: #aaa; font-size: 14px; margin-bottom: 30px; }
+        h1 { margin-bottom: 5px; font-weight: 300; letter-spacing: 4px; font-size: 24px; }
+        p { color: #aaa; font-size: 14px; margin-bottom: 30px; max-width: 300px; line-height: 1.5; }
+        
+        /* HUD (Heads Up Display) */
+        #hud {
+            position: absolute; top: 20px; left: 0; width: 100%;
+            text-align: center; pointer-events: none; z-index: 5;
+            display: none; /* Hidden until start */
+        }
+        .score-pill {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 25px;
+            border-radius: 50px;
+            color: #fff;
+            font-weight: 600;
+            letter-spacing: 1px;
+            font-size: 14px;
+            text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
         button {
-            padding: 18px 40px; font-size: 16px; background: white;
+            padding: 16px 40px; font-size: 14px; background: white;
             border: none; border-radius: 30px; color: #000; cursor: pointer; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.1s;
-            font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+            box-shadow: 0 4px 20px rgba(0,200,255,0.3); transition: transform 0.1s;
+            font-weight: 700; text-transform: uppercase; letter-spacing: 2px;
         }
         button:active { transform: scale(0.95); }
+        
         #hint { 
             position: absolute; bottom: 30px; width: 100%; text-align: center; 
-            color: rgba(255,255,255,0.3); pointer-events: none; font-size: 12px;
+            color: rgba(255,255,255,0.2); pointer-events: none; font-size: 11px;
             text-transform: uppercase; letter-spacing: 2px;
         }
     </style>
@@ -31,13 +56,17 @@
 </head>
 <body>
 
-<div id="hint">Hold Phone Flat • Tilt Gently</div>
+<div id="hud">
+    <span class="score-pill" id="scoreDisplay">Collected: 0 / 50</span>
+</div>
+
+<div id="hint">Tilt Phone to Guide Particles to Center</div>
 
 <div id="overlay">
     <div>
-        <h1>LIQUID UX</h1>
-        <p>Interactive Surface Demo</p>
-        <button id="startBtn">Initialize</button>
+        <h1>FLUID CLEANUP</h1>
+        <p>Tilt your device to swirl the liquid. Guide the orange particles into the central drain.</p>
+        <button id="startBtn">Start Simulation</button>
     </div>
 </div>
 
@@ -46,12 +75,11 @@
     const NX = 64; 
     const NY = 64;
     const Q = 9; 
-    // Lower viscosity = more splashy, Higher = more honey-like
-    // 0.03 is a good balance for water-like movement
-    const VISCOSITY = 0.03; 
+    // Viscosity: 0.02 is splashy water. 0.1 is oil.
+    const VISCOSITY = 0.025; 
     const OMEGA = 1.0 / (3.0 * VISCOSITY + 0.5);
 
-    // --- LBM VARIABLES ---
+    // --- LBM ARRAYS ---
     const SIZE = NX * NY * Q;
     let f = new Float32Array(SIZE);
     let f_new = new Float32Array(SIZE);
@@ -59,7 +87,7 @@
     let ux = new Float32Array(NX * NY);  
     let uy = new Float32Array(NX * NY);  
 
-    // Weights and Vectors (D2Q9)
+    // D2Q9 Lattice Constants
     const w = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
     const cx = [0, 1, 0, -1, 0, 1, -1, -1, 1];
     const cy = [0, 0, 1, 0, -1, 1, 1, -1, -1];
@@ -68,30 +96,34 @@
     // Physics State
     let gravityX = 0.0;
     let gravityY = 0.0;
-    
-    // Smoothing variables (Lerp)
     let targetGravityX = 0.0;
     let targetGravityY = 0.0;
     let running = false;
 
-    // --- 1. INITIALIZATION ---
+    // --- PARTICLE SYSTEM CONFIG ---
+    const PARTICLE_COUNT = 50;
+    // x, y per particle
+    const particles = new Float32Array(PARTICLE_COUNT * 2); 
+    // 1 = active, 0 = collected
+    const particleActive = new Uint8Array(PARTICLE_COUNT); 
+    let collectedCount = 0;
+    
+    // --- THREE.JS GLOBALS ---
+    let scene, camera, renderer, plane, particleMesh, dummyObj, drainRing;
+
+
+    // ==========================================
+    // 1. INITIALIZATION
+    // ==========================================
+    
     function initLBM() {
+        // Initialize Fluid (Flat surface with a small perturbation)
         for (let y = 0; y < NY; y++) {
             for (let x = 0; x < NX; x++) {
                 const idx = y * NX + x;
+                // Slight noise to make it look organic immediately
+                let initialRho = 1.0 + (Math.random() * 0.01);
                 
-                // Create a Gaussian Drop in the center
-                const dx = x - NX/2;
-                const dy = y - NY/2;
-                const distSq = dx*dx + dy*dy;
-                
-                // Drop radius approx 10-12 grid units
-                let initialRho = 1.0;
-                if (distSq < 100) {
-                    // Smooth hump
-                    initialRho += 1.5 * Math.exp(-distSq / 50);
-                }
-
                 rho[idx] = initialRho;
                 ux[idx] = 0;
                 uy[idx] = 0;
@@ -103,10 +135,31 @@
         }
     }
 
-    // --- 2. PHYSICS LOOP ---
+    function initParticles() {
+        for(let i=0; i<PARTICLE_COUNT; i++) {
+            // Spawn randomly, but avoid the exact center (the drain) immediately
+            let px, py, dist;
+            do {
+                px = Math.random() * NX;
+                py = Math.random() * NY;
+                const dx = px - NX/2;
+                const dy = py - NY/2;
+                dist = Math.sqrt(dx*dx + dy*dy);
+            } while(dist < 10); // Ensure they start away from drain
+
+            particles[i*2] = px;
+            particles[i*2+1] = py;
+            particleActive[i] = 1;
+        }
+        updateScoreUI();
+    }
+
+    // ==========================================
+    // 2. PHYSICS ENGINE
+    // ==========================================
+
     function stepLBM() {
-        // 1. Smooth Gravity Input (Low Pass Filter)
-        // This removes the "jitter" and makes it feel heavy
+        // Smooth Gravity (Low Pass Filter) to prevent jitter
         gravityX += (targetGravityX - gravityX) * 0.1;
         gravityY += (targetGravityY - gravityY) * 0.1;
 
@@ -139,9 +192,12 @@
 
                 const u2 = localUx * localUx + localUy * localUy;
 
+                // Collision Step
                 for (let i = 0; i < Q; i++) {
                     const cidotU = cx[i] * localUx + cy[i] * localUy;
                     const feq = w[i] * sumRho * (1 + 3 * cidotU + 4.5 * cidotU * cidotU - 1.5 * u2);
+                    
+                    // Streaming Step (combined with Collision for performance)
                     const postCollision = f[idx * Q + i] * (1 - OMEGA) + feq * OMEGA;
 
                     const nextX = x + cx[i];
@@ -150,158 +206,268 @@
                     if (nextX >= 0 && nextX < NX && nextY >= 0 && nextY < NY) {
                         f_new[(nextY * NX + nextX) * Q + i] = postCollision;
                     } else {
+                        // Bounce-back condition (Walls)
                         f_new[idx * Q + opposite[i]] = postCollision;
                     }
                 }
             }
         }
         
+        // Swap buffers
         let temp = f; f = f_new; f_new = temp;
     }
 
-    // --- 3. THREE.JS VISUALIZATION ---
-    const scene = new THREE.Scene();
-    // scene.background = new THREE.Color(0x111111);
-    scene.fog = new THREE.FogExp2(0x111111, 0.015);
+    function stepParticles() {
+        const centerX = NX / 2;
+        const centerY = NY / 2;
+        const drainRadius = 4.0; // Radius of collection zone
 
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, -60, 60);
-    camera.lookAt(0, 0, 0);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            if (particleActive[i] === 0) continue;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    document.body.appendChild(renderer.domElement);
+            let px = particles[i*2];
+            let py = particles[i*2+1];
 
-    // --- Lighting (Crucial for Liquid Look) ---
-    const ambientLight = new THREE.AmbientLight(0x404040, 1);
-    scene.add(ambientLight);
+            // 1. Get fluid velocity at particle position
+            const gridX = Math.floor(px);
+            const gridY = Math.floor(py);
+            const safeIdx = Math.max(0, Math.min(NX * NY - 1, gridY * NX + gridX));
 
-    // Blue point light from one side
-    const pLight1 = new THREE.PointLight(0x0088ff, 2, 100);
-    pLight1.position.set(20, 20, 30);
-    scene.add(pLight1);
+            // 2. Advection: Move particle by fluid velocity
+            // Multiplier 40 makes them flow nicely relative to the grid size
+            let vx = ux[safeIdx] * 40.0;
+            let vy = uy[safeIdx] * 40.0;
 
-    // White rim light
-    const pLight2 = new THREE.PointLight(0xffffff, 1, 100);
-    pLight2.position.set(-20, -20, 30);
-    scene.add(pLight2);
+            // Add a tiny bit of gravity direct to particles so they slide on "dry" spots
+            vx += gravityX * 3.0;
+            vy += gravityY * 3.0;
 
-    // Directional Shadow Caster
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    dirLight.position.set(0, -50, 100);
-    dirLight.castShadow = true;
-    scene.add(dirLight);
+            px += vx;
+            py += vy;
 
-    // --- The Liquid Mesh ---
-    const geometry = new THREE.PlaneGeometry(NX, NY, NX - 1, NY - 1);
-    
-    // Physical Material for "Glossy Droplet" look
-    const material = new THREE.MeshPhysicalMaterial({ 
-        color: 0x00aaff, 
-        metalness: 0.1,
-        roughness: 0.1,
-        clearcoat: 1.0,
-        clearcoatRoughness: 0.1,
-        transmission: 0.2, // Slight transparency
-        opacity: 0.9,
-        transparent: true,
-        side: THREE.DoubleSide,
-        flatShading: false
-    });
+            // 3. Boundary Clamp
+            if (px < 1) px = 1; if (px > NX - 2) px = NX - 2;
+            if (py < 1) py = 1; if (py > NY - 2) py = NY - 2;
 
-    const plane = new THREE.Mesh(geometry, material);
-    plane.castShadow = true;
-    plane.receiveShadow = true;
-    scene.add(plane);
+            // 4. Check Collection (Distance to center)
+            const dx = px - centerX;
+            const dy = py - centerY;
+            const distSq = dx*dx + dy*dy;
 
-    // --- Update Mesh Vertices ---
+            if (distSq < drainRadius * drainRadius) {
+                particleActive[i] = 0; // Die
+                collectedCount++;
+                updateScoreUI();
+                
+                // Little "pop" effect logic could go here
+            } else {
+                // Save position
+                particles[i*2] = px;
+                particles[i*2+1] = py;
+            }
+        }
+    }
+
+    function updateScoreUI() {
+        const el = document.getElementById('scoreDisplay');
+        el.innerText = `Collected: ${collectedCount} / ${PARTICLE_COUNT}`;
+        if(collectedCount === PARTICLE_COUNT) {
+            el.innerText = "CLEANUP COMPLETE!";
+            el.style.background = "rgba(0, 255, 100, 0.3)";
+        }
+    }
+
+    // ==========================================
+    // 3. GRAPHICS (THREE.JS)
+    // ==========================================
+
+    function initThree() {
+        scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.015);
+
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, -55, 55);
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // --- Lights ---
+        const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+        scene.add(ambientLight);
+
+        const pLight1 = new THREE.PointLight(0x0088ff, 2, 100);
+        pLight1.position.set(30, 20, 40);
+        scene.add(pLight1);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(-20, -50, 100);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // --- Water Mesh ---
+        const geometry = new THREE.PlaneGeometry(NX, NY, NX - 1, NY - 1);
+        const material = new THREE.MeshPhysicalMaterial({ 
+            color: 0x0099ff, 
+            metalness: 0.2, roughness: 0.1,
+            clearcoat: 1.0, clearcoatRoughness: 0.1,
+            transmission: 0.1, opacity: 0.9, transparent: true,
+            side: THREE.DoubleSide
+        });
+
+        plane = new THREE.Mesh(geometry, material);
+        plane.castShadow = true;
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // --- Drain Ring ---
+        const ringGeo = new THREE.RingGeometry(3.5, 3.8, 32);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+        drainRing = new THREE.Mesh(ringGeo, ringMat);
+        drainRing.position.set(0,0,2);
+        scene.add(drainRing);
+
+        // --- Particles (InstancedMesh) ---
+        const pGeo = new THREE.SphereGeometry(0.4, 8, 8);
+        const pMat = new THREE.MeshLambertMaterial({ color: 0xffaa00, emissive: 0xff4400, emissiveIntensity: 0.5 });
+        particleMesh = new THREE.InstancedMesh(pGeo, pMat, PARTICLE_COUNT);
+        particleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        scene.add(particleMesh);
+
+        dummyObj = new THREE.Object3D();
+    }
+
     function updateVisuals() {
+        // 1. Update Water Height
         const positions = plane.geometry.attributes.position.array;
-        
         for (let i = 0; i < NX * NY; i++) {
             let d = rho[i];
-            
-            // VISUAL TRICK: Thresholding
-            // If density is close to 1.0 (air), force it to 0 height.
-            // This hides the "gas" and only shows the "liquid".
-            const threshold = 1.05;
+            // Thresholding for "Liquid" look
             let h = 0;
-            
-            if (d > threshold) {
-                // Smoothstep-like transition for rounded edges
-                h = (d - threshold) * 25.0;
+            if (d > 1.02) {
+                h = (d - 1.02) * 20.0;
             }
-
             positions[i * 3 + 2] = h; 
         }
-        
         plane.geometry.attributes.position.needsUpdate = true;
         plane.geometry.computeVertexNormals();
-    }
 
-    // --- 4. INTERACTION ---
-    function handleOrientation(event) {
-        let x = event.gamma || 0; 
-        let y = event.beta || 0;  
+        // 2. Update Particles
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            if (particleActive[i] === 0) {
+                // Move collected particles out of view
+                dummyObj.position.set(0, 0, -1000);
+            } else {
+                const px = particles[i*2];
+                const py = particles[i*2+1];
+                
+                // Convert grid coords to world coords (Centered)
+                const wx = px - NX/2;
+                const wy = py - NY/2;
+                
+                // Get height at this pos for floating
+                const gridIdx = Math.floor(py) * NX + Math.floor(px);
+                const fluidZ = positions[gridIdx * 3 + 2] || 0;
 
-        // Clamp Max Tilt (Prevent extreme forces)
-        const maxTilt = 25; 
-        if (x > maxTilt) x = maxTilt; if (x < -maxTilt) x = -maxTilt;
-        if (y > maxTilt) y = maxTilt; if (y < -maxTilt) y = -maxTilt;
-
-        // SENSITIVITY ADJUSTMENT:
-        // Reduced multiplier significantly (0.005 -> 0.0015)
-        // We set a TARGET, and the physics loop Lerps towards it (Smoothing)
-        targetGravityX = (x / maxTilt) * 0.0015;
-        targetGravityY = -(y / maxTilt) * 0.0015;
-    }
-
-    function requestAccess() {
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            DeviceOrientationEvent.requestPermission()
-                .then(response => {
-                    if (response === 'granted') {
-                        window.addEventListener('deviceorientation', handleOrientation);
-                        startSim();
-                    } else {
-                        alert("Gyroscope permission required for interaction.");
-                    }
-                })
-                .catch(console.error);
-        } else {
-            window.addEventListener('deviceorientation', handleOrientation);
-            startSim();
+                dummyObj.position.set(wx, wy, fluidZ + 0.5);
+            }
+            dummyObj.updateMatrix();
+            particleMesh.setMatrixAt(i, dummyObj.matrix);
         }
+        particleMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    // ==========================================
+    // 4. INPUT & LOOP
+    // ==========================================
+
+    function handleOrientation(event) {
+        let x = event.gamma || 0; // Left/Right tilt
+        let y = event.beta || 0;  // Front/Back tilt
+
+        // Clamp
+        if (x > 30) x = 30; if (x < -30) x = -30;
+        if (y > 30) y = 30; if (y < -30) y = -30;
+
+        // Map to Gravity
+        targetGravityX = (x / 30) * 0.002;
+        targetGravityY = -(y / 30) * 0.002;
+    }
+    
+    // Mouse Fallback for Desktop testing
+    function handleMouseMove(event) {
+        const x = (event.clientX / window.innerWidth) * 2 - 1;
+        const y = (event.clientY / window.innerHeight) * 2 - 1;
+        // Emulate tilt based on mouse position relative to center
+        targetGravityX = x * 0.002;
+        targetGravityY = -y * 0.002;
     }
 
     function startSim() {
         document.getElementById('overlay').style.opacity = '0';
-        setTimeout(() => { document.getElementById('overlay').style.display = 'none'; }, 500);
+        setTimeout(() => { 
+            document.getElementById('overlay').style.display = 'none'; 
+            document.getElementById('hud').style.display = 'block';
+        }, 500);
+        
         running = true;
+        initThree();
         initLBM();
+        initParticles();
         animate();
+    }
+
+    function requestAccess() {
+        // Detect Mobile
+        if (/Mobi|Android/i.test(navigator.userAgent)) {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                            startSim();
+                        } else {
+                            alert("Gyroscope required.");
+                        }
+                    }).catch(e => alert(e));
+            } else {
+                // Non-iOS mobile
+                window.addEventListener('deviceorientation', handleOrientation);
+                startSim();
+            }
+        } else {
+            // Desktop fallback
+            window.addEventListener('mousemove', handleMouseMove);
+            startSim();
+        }
     }
 
     function animate() {
         requestAnimationFrame(animate);
         if (!running) return;
 
-        // 2 physics steps per render frame for fluid stability
+        // Multiple physics steps per frame for stability
         stepLBM();
         stepLBM();
         
-        updateVisuals();
+        stepParticles(); // Update particle logic
+        updateVisuals(); // Update meshes
+        
         renderer.render(scene, camera);
     }
 
     document.getElementById('startBtn').addEventListener('click', requestAccess);
 
     window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        if(camera) {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
     });
+
 </script>
 </body>
 </html>
