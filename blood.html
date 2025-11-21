@@ -1,131 +1,602 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D LBM Blood Flow Sim</title>
-    <style> body { margin: 0; background: #000; } canvas { display: block; } </style>
+  <meta charset="UTF-8" />
+  <title>LBM Blood Flow Simulation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color-scheme: dark;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: #020617; /* near black */
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+    .wrapper {
+      max-width: 960px;
+      width: 100%;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    h1 {
+      font-size: 1.4rem;
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      font-size: 0.9rem;
+      color: #9ca3af;
+      margin-bottom: 1rem;
+    }
+    .panel {
+      background: #020617;
+      border-radius: 12px;
+      border: 1px solid #1f2937;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.6);
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px 16px;
+      align-items: center;
+      font-size: 0.85rem;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: #9ca3af;
+    }
+    .control-label span.value {
+      color: #e5e7eb;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+    input[type=range] {
+      width: 100%;
+    }
+    .buttons-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    button {
+      font-size: 0.85rem;
+      padding: 6px 10px;
+      border-radius: 20px;
+      border: 1px solid #374151;
+      background: #0b1120;
+      color: #e5e7eb;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.05s;
+    }
+    button:hover {
+      background: #111827;
+    }
+    button:active {
+      transform: scale(0.97);
+    }
+    button.primary {
+      border-color: #ef4444;
+      background: #991b1b;
+    }
+    button.primary:hover {
+      background: #b91c1c;
+    }
+    canvas {
+      border-radius: 12px;
+      border: 1px solid #1f2937;
+      display: block;
+      margin: 0 auto;
+      image-rendering: pixelated;
+      width: 100%;   /* responsive upscale */
+      height: auto;
+      background: #020617;
+    }
+    .hint {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+    .legend {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      padding: 2px 8px;
+      border-radius: 9999px;
+      border: 1px solid #4b5563;
+      background: #020617;
+      font-size: 0.75rem;
+    }
+  </style>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-    <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 400; canvas.height = 200; // Render scale 2x
-        const NX = 200, NY = 100, NQ = 9; // D2Q9
-        const w = new Float32Array([4/9,1/9,1/9,1/9,1/9,1/36,1/36,1/36,1/36]);
-        const ex = new Int32Array([0,1,0,-1,0,1,-1,-1,1]);
-        const ey = new Int32Array([0,0,1,0,-1,1,1,-1,-1]);
-        let f = new Float32Array(NX * NY * NQ).fill(1/NQ); // Distributions
-        let obstacle = new Uint8Array(NX * NY).fill(0); // 0=fluid,1=wall
-        let rho, ux, uy; // Macros
-        let omega = 0.6; // Viscosity (relaxation)
-        let inletU = 0.05; // Poiseuille-like inlet
-        let mouseX=0, mouseY=0, adding=false;
+<div class="wrapper">
+  <h1>LBM Blood Flow in a Vessel (2D D2Q9)</h1>
+  <div class="subtitle">
+    Simple educational demo: red tracer particles represent red blood cells (RBCs) advected in a channel flow,
+    computed with a 2D lattice Boltzmann method (D2Q9).
+  </div>
 
-        function init() {
-            // Vessel walls (simple channel)
-            for (let i=0; i<NX; i++) {
-                obstacle[i] = obstacle[i + (NY-1)*NX] = 1; // Top/bottom walls
-            }
-            // Add initial "blood cells" (high density blobs)
-            for (let y=20; y<30; y++) for (let x=10; x<20; x++) {
-                let idx = (y*NX + x) * NQ;
-                f[idx] = 2; // Red cell clump
-            }
-            requestAnimationFrame(step);
+  <div class="panel">
+    <div class="controls">
+      <div class="control-group">
+        <label class="control-label">
+          <span>Inlet peak velocity \(u_\mathrm{max}\)</span>
+          <span class="value" id="inletVelLabel">0.080</span>
+        </label>
+        <input type="range" id="inletVelocity" min="0.01" max="0.15" step="0.005" value="0.08">
+      </div>
+
+      <div class="control-group">
+        <label class="control-label">
+          <span>Relaxation time \(\tau\) (viscosity)</span>
+          <span class="value" id="tauLabel">0.600</span>
+        </label>
+        <input type="range" id="relaxationTime" min="0.52" max="1.50" step="0.02" value="0.60">
+      </div>
+
+      <div class="control-group">
+        <label class="control-label">
+          <span>Tracer particles (hematocrit proxy)</span>
+          <span class="value" id="particleCountLabel">250</span>
+        </label>
+        <input type="range" id="particleCount" min="0" max="800" step="10" value="250">
+      </div>
+
+      <div class="control-group">
+        <label class="control-label">
+          <span>Particle advection factor</span>
+          <span class="value" id="particleSpeedLabel">30</span>
+        </label>
+        <input type="range" id="particleSpeed" min="5" max="60" step="1" value="30">
+      </div>
+    </div>
+
+    <div class="buttons-row">
+      <button id="toggleBtn" class="primary">Pause</button>
+      <button id="resetBtn">Reset simulation</button>
+    </div>
+
+    <div class="hint">
+      • Velocity magnitude in the vessel is encoded as a red/yellow background.<br>
+      • Red disks are passive particles (RBCs) carried by the LBM velocity field.<br>
+      • Top and bottom walls use bounce-back (no-slip); left boundary has a parabolic inflow profile.
+    </div>
+    <div class="legend">
+      <span class="tag">Model: D2Q9, BGK, isothermal, Newtonian (blood is simplified!)</span>
+      <span class="tag">Domain: periodic in flow direction, channel in cross-section</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <canvas id="lbmCanvas"></canvas>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* --- LBM parameters & data structures --- */
+
+// Lattice size (you can tweak these, but keep them moderate)
+const nx = 200;
+const ny = 64;
+const q = 9;
+
+// Discrete velocities for D2Q9
+const cx = [0, 1, 0, -1,  0, 1, -1, -1,  1];
+const cy = [0, 0, 1,  0, -1, 1,  1, -1, -1];
+
+// Weights
+const w = [
+  4/9,
+  1/9, 1/9, 1/9, 1/9,
+  1/36, 1/36, 1/36, 1/36
+];
+
+// Opposite directions for bounce-back
+const opposite = [0, 3, 4, 1, 2, 7, 8, 5, 6];
+
+// Lattice data
+let f = new Float32Array(nx * ny * q);
+let fNext = new Float32Array(nx * ny * q);
+let rho = new Float32Array(nx * ny);
+let ux = new Float32Array(nx * ny);
+let uy = new Float32Array(nx * ny);
+
+// Simulation parameters (adjusted via UI)
+let tau = 0.6;
+let omega = 1.0 / tau;
+let inletVelocity = 0.08;
+
+// Particles as RBC tracers
+let particles = [];
+let particleCount = 250;
+let particleSpeedFactor = 30;
+
+// Render/control
+const stepsPerFrame = 4;
+let running = true;
+
+// Canvas setup
+const canvas = document.getElementById("lbmCanvas");
+const ctx = canvas.getContext("2d");
+canvas.width = nx;
+canvas.height = ny;
+ctx.imageSmoothingEnabled = false;
+let imageData = ctx.createImageData(nx, ny);
+
+/* --- Helper functions --- */
+
+function cellIndex(x, y) {
+  return (y * nx + x);
+}
+function distIndex(x, y, dir) {
+  return ( (y * nx + x) * q + dir );
+}
+
+/* --- Initialization --- */
+
+function initLBM() {
+  const rho0 = 1.0;
+  const u0x = 0.0;
+  const u0y = 0.0;
+
+  for (let y = 0; y < ny; y++) {
+    for (let x = 0; x < nx; x++) {
+      const idxCell = cellIndex(x, y);
+      rho[idxCell] = rho0;
+      ux[idxCell] = u0x;
+      uy[idxCell] = u0y;
+
+      const u2 = u0x * u0x + u0y * u0y;
+      for (let dir = 0; dir < q; dir++) {
+        const cu = cx[dir] * u0x + cy[dir] * u0y;
+        const feq = w[dir] * rho0 * (1 + 3 * cu + 4.5 * cu * cu - 1.5 * u2);
+        f[distIndex(x, y, dir)] = feq;
+      }
+    }
+  }
+}
+
+function initParticles(count) {
+  particles = [];
+  if (count <= 0) return;
+
+  for (let i = 0; i < count; i++) {
+    // Start in the left half of the vessel, away from the walls
+    const x = Math.random() * (nx * 0.3);
+    const y = 1 + Math.random() * (ny - 2); // avoid y=0 and y=ny-1 (walls)
+    particles.push({ x: x, y: y });
+  }
+}
+
+/* --- Core LBM steps --- */
+
+function computeMacros() {
+  for (let y = 0; y < ny; y++) {
+    for (let x = 0; x < nx; x++) {
+      const idxCell = cellIndex(x, y);
+      let rhoLoc = 0.0;
+      let uxLoc = 0.0;
+      let uyLoc = 0.0;
+
+      const base = idxCell * q;
+      for (let dir = 0; dir < q; dir++) {
+        const fi = f[base + dir];
+        rhoLoc += fi;
+        uxLoc += fi * cx[dir];
+        uyLoc += fi * cy[dir];
+      }
+
+      rho[idxCell] = rhoLoc;
+      if (rhoLoc > 0) {
+        ux[idxCell] = uxLoc / rhoLoc;
+        uy[idxCell] = uyLoc / rhoLoc;
+      } else {
+        ux[idxCell] = 0.0;
+        uy[idxCell] = 0.0;
+      }
+    }
+  }
+}
+
+function collideAndStream() {
+  // We collide in-place using macros, then stream into fNext.
+  fNext.fill(0.0);
+  const omegaLocal = omega;
+
+  for (let y = 0; y < ny; y++) {
+    for (let x = 0; x < nx; x++) {
+      const idxCell = cellIndex(x, y);
+      const base = idxCell * q;
+
+      const rhoLoc = rho[idxCell];
+      const uxLoc = ux[idxCell];
+      const uyLoc = uy[idxCell];
+      const u2 = uxLoc * uxLoc + uyLoc * uyLoc;
+
+      for (let dir = 0; dir < q; dir++) {
+        const fi = f[base + dir];
+
+        const cu = cx[dir] * uxLoc + cy[dir] * uyLoc;
+        const feq = w[dir] * rhoLoc * (1 + 3 * cu + 4.5 * cu * cu - 1.5 * u2);
+
+        // Simple BGK collision
+        const fPost = fi - omegaLocal * (fi - feq);
+
+        // Streaming step
+        let x1 = x + cx[dir];
+        let y1 = y + cy[dir];
+
+        // Bounce-back at top/bottom walls (y=0, y=ny-1)
+        if (y1 < 0 || y1 >= ny) {
+          // reflect back into the same cell in opposite direction
+          const opp = opposite[dir];
+          fNext[base + opp] += fPost;
+        } else {
+          // Periodic in x-direction
+          if (x1 < 0) x1 += nx;
+          if (x1 >= nx) x1 -= nx;
+
+          const idxCellNext = cellIndex(x1, y1);
+          fNext[idxCellNext * q + dir] += fPost;
         }
+      }
+    }
+  }
 
-        function collide() {
-            rho = new Float32Array(NX*NY).fill(0);
-            ux = new Float32Array(NX*NY).fill(0);
-            uy = new Float32Array(NX*NY).fill(0);
-            for (let k=0; k<NQ; k++) {
-                for (let y=0; y<NY; y++) for (let x=0; x<NX; x++) {
-                    let i = y*NX + x;
-                    let idx = i * NQ + k;
-                    rho[i] += f[idx];
-                    ux[i] += f[idx] * ex[k];
-                    uy[i] += f[idx] * ey[k];
-                }
-            }
-            for (let y=0; y<NY; y++) for (let x=0; x<NX; x++) {
-                let i = y*NX + x;
-                if (obstacle[i]) continue;
-                let cu = ux[i]/rho[i], cu2 = cu*cu;
-                let feq = new Float32Array(NQ);
-                for (let k=0; k<NQ; k++) {
-                    let eu = ex[k]*cu;
-                    feq[k] = w[k] * rho[i] * (1 + 3*eu + 4.5*eu*eu - 1.5*cu2);
-                }
-                // Simple shear-thinning approx for blood (lower omega at high shear)
-                let shear = Math.sqrt((ux[i]-ux[Math.max(0,i-1)])**2 + (uy[i]-uy[Math.max(0,i-NX)])**2);
-                let omega_local = omega * (1 - 0.2 * Math.min(1, shear*100)); // Non-Newtonian
-                for (let k=0; k<NQ; k++) {
-                    let idx = i * NQ + k;
-                    f[idx] += omega_local * (feq[k] - f[idx]);
-                }
-            }
-        }
+  // Swap populations
+  const tmp = f;
+  f = fNext;
+  fNext = tmp;
+}
 
-        function stream() {
-            let fnew = new Float32Array(NX * NY * NQ);
-            for (let k=0; k<NQ; k++) {
-                for (let y=0; y<NY; y++) for (let x=0; x<NX; x++) {
-                    let xnew = x - ex[k], ynew = y - ey[k];
-                    if (xnew<0) { // Inlet: parabolic profile
-                        let u = inletU * (1 - ((ynew+ey[k])/NY)**2);
-                        let idxnew = (ynew*NX + x) * NQ + (k^8)%9; // Opposite direction
-                        fnew[(ynew*NX + x)*NQ + k] = rho[ynew*NX + x] * w[k] * (1 + 3*u*ex[k]);
-                        continue;
-                    }
-                    if (xnew>=NX || ynew<0 || ynew>=NY) continue;
-                    let idx = (ynew*NX + xnew) * NQ + k;
-                    fnew[(y*NX + x)*NQ + k] = f[idx];
-                }
-            }
-            f = fnew;
-            // Bounce-back for walls
-            for (let y=0; y<NY; y++) for (let x=0; x<NX; x++) {
-                if (obstacle[y*NX + x]) {
-                    for (let k=1; k<NQ; k++) {
-                        let xnew = x + ex[k], ynew = y + ey[k];
-                        if (xnew<0 || xnew>=NX || ynew<0 || ynew>=NY) continue;
-                        let idx = (ynew*NX + xnew)*NQ + (k^8)%9; // Opposite
-                        f[(y*NX + x)*NQ + k] = f[idx];
-                    }
-                }
-            }
-        }
+// Parabolic inflow (Zou–He-style velocity BC approximated by re-init eq)
+function applyBoundaryConditions() {
+  const rho0 = 1.0;
+  const uMax = inletVelocity;
 
-        function draw() {
-            ctx.clearRect(0,0,canvas.width,canvas.height);
-            for (let y=0; y<NY; y+=2) for (let x=0; x<NX; x+=2) { // Downsample
-                let i = y*NX + x;
-                let r = Math.min(255, rho[i]*5000); // Density -> red intensity
-                ctx.fillStyle = `rgb(${r},0,0)`;
-                ctx.fillRect(x*2, y*2, 2, 2);
-            }
-        }
+  // Inlet at x = 0: impose parabolic u_x(y)
+  for (let y = 0; y < ny; y++) {
+    const idxCell = cellIndex(0, y);
+    // normalized y in [0,1]
+    const yNorm = (y + 0.5) / ny;
+    // Poiseuille-like profile: u(y) = 4 * uMax * y * (1 - y)
+    const uxLoc = 4.0 * uMax * yNorm * (1.0 - yNorm);
+    const uyLoc = 0.0;
+    const u2 = uxLoc * uxLoc + uyLoc * uyLoc;
+    rho[idxCell] = rho0;
+    ux[idxCell] = uxLoc;
+    uy[idxCell] = uyLoc;
 
-        function step() {
-            collide();
-            stream();
-            draw();
-            // Mouse interaction
-            if (adding) {
-                let x = Math.floor(mouseX/2), y = Math.floor(mouseY/2);
-                if (x>=0 && x<NX && y>=0 && y<NY) obstacle[y*NX + x] = 1;
-            }
-            requestAnimationFrame(step);
-        }
+    const base = idxCell * q;
+    for (let dir = 0; dir < q; dir++) {
+      const cu = cx[dir] * uxLoc + cy[dir] * uyLoc;
+      const feq = w[dir] * rho0 * (1 + 3 * cu + 4.5 * cu * cu - 1.5 * u2);
+      f[base + dir] = feq;
+    }
+  }
 
-        canvas.addEventListener('mousemove', e => {
-            mouseX = e.clientX; mouseY = e.clientY;
-        });
-        canvas.addEventListener('click', () => adding = !adding); // Toggle add obstacle/cell
+  // Outlet at x = nx-1: simple zero-gradient (copy from neighbor x=nx-2)
+  for (let y = 0; y < ny; y++) {
+    const idxIn  = cellIndex(nx - 2, y);
+    const idxOut = cellIndex(nx - 1, y);
+    for (let dir = 0; dir < q; dir++) {
+      f[idxOut * q + dir] = f[idxIn * q + dir];
+    }
+  }
+}
 
-        init();
-    </script>
+function stepLBM() {
+  computeMacros();
+  collideAndStream();
+  applyBoundaryConditions();
+}
+
+/* --- Particles (RBC tracers) --- */
+
+function updateParticles() {
+  const speedFactor = particleSpeedFactor;
+
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+
+    let x = p.x;
+    let y = p.y;
+
+    // Sample velocity at nearest lattice node
+    let xi = Math.floor(x);
+    let yi = Math.floor(y);
+
+    if (xi < 0) xi = 0;
+    if (xi >= nx) xi = nx - 1;
+    if (yi < 0) yi = 0;
+    if (yi >= ny) yi = ny - 1;
+
+    const idxCell = cellIndex(xi, yi);
+    const vx = ux[idxCell];
+    const vy = uy[idxCell];
+
+    x += vx * speedFactor;
+    y += vy * speedFactor;
+
+    // Periodic wrap in flow direction
+    if (x < 0) x += nx;
+    if (x >= nx) x -= nx;
+
+    // Keep particles inside the channel (simple bounce)
+    if (y < 1) {
+      y = 1;
+    } else if (y > ny - 2) {
+      y = ny - 2;
+    }
+
+    p.x = x;
+    p.y = y;
+  }
+}
+
+/* --- Rendering --- */
+
+function drawField() {
+  const data = imageData.data;
+  let maxSpeed = 0.0;
+
+  // First pass: find max speed for normalization
+  for (let y = 0; y < ny; y++) {
+    for (let x = 0; x < nx; x++) {
+      const idxCell = cellIndex(x, y);
+      const vx = ux[idxCell];
+      const vy = uy[idxCell];
+      const s = Math.sqrt(vx * vx + vy * vy);
+      if (s > maxSpeed) maxSpeed = s;
+    }
+  }
+
+  // Avoid division by zero
+  if (maxSpeed < 1e-6) maxSpeed = 1e-6;
+
+  // Second pass: color mapping
+  for (let y = 0; y < ny; y++) {
+    for (let x = 0; x < nx; x++) {
+      const idxCell = cellIndex(x, y);
+      const vx = ux[idxCell];
+      const vy = uy[idxCell];
+      const s = Math.sqrt(vx * vx + vy * vy);
+
+      let v = s / maxSpeed;
+      if (v > 1.0) v = 1.0;
+      if (v < 0.0) v = 0.0;
+
+      // Dark red -> bright yellowish
+      const r = Math.floor(30 + 220 * v);
+      const g = Math.floor(5 + 120 * v);
+      const b = Math.floor(20 + 40 * (1.0 - v));
+
+      // Flip vertically so y=0 is at bottom visually
+      const yy = ny - 1 - y;
+      const p = (yy * nx + x) * 4;
+      data[p + 0] = r;
+      data[p + 1] = g;
+      data[p + 2] = b;
+      data[p + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function drawParticles() {
+  ctx.save();
+  ctx.globalAlpha = 0.95;
+  ctx.fillStyle = "#f97373"; // soft red
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    const x = p.x + 0.5;
+    const y = (ny - 1 - p.y) + 0.5; // same vertical flip as fluid
+    ctx.beginPath();
+    ctx.arc(x, y, 0.6, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function draw() {
+  drawField();
+  drawParticles();
+}
+
+/* --- Animation loop --- */
+
+function loop() {
+  if (running) {
+    for (let i = 0; i < stepsPerFrame; i++) {
+      stepLBM();
+    }
+    computeMacros(); // ensure latest macros for rendering + particles
+    updateParticles();
+    draw();
+  }
+  requestAnimationFrame(loop);
+}
+
+/* --- UI wiring --- */
+
+const inletSlider = document.getElementById("inletVelocity");
+const inletLabel = document.getElementById("inletVelLabel");
+const tauSlider = document.getElementById("relaxationTime");
+const tauLabel = document.getElementById("tauLabel");
+const particleSlider = document.getElementById("particleCount");
+const particleCountLabel = document.getElementById("particleCountLabel");
+const particleSpeedSlider = document.getElementById("particleSpeed");
+const particleSpeedLabel = document.getElementById("particleSpeedLabel");
+const toggleBtn = document.getElementById("toggleBtn");
+const resetBtn = document.getElementById("resetBtn");
+
+inletSlider.addEventListener("input", () => {
+  inletVelocity = parseFloat(inletSlider.value);
+  inletLabel.textContent = inletVelocity.toFixed(3);
+});
+
+tauSlider.addEventListener("input", () => {
+  tau = parseFloat(tauSlider.value);
+  if (tau <= 0.5) tau = 0.51; // stability guard
+  omega = 1.0 / tau;
+  tauLabel.textContent = tau.toFixed(3);
+});
+
+particleSlider.addEventListener("input", () => {
+  particleCount = parseInt(particleSlider.value, 10);
+  particleCountLabel.textContent = particleCount.toString();
+  initParticles(particleCount);
+});
+
+particleSpeedSlider.addEventListener("input", () => {
+  particleSpeedFactor = parseFloat(particleSpeedSlider.value);
+  particleSpeedLabel.textContent = particleSpeedFactor.toFixed(0);
+});
+
+toggleBtn.addEventListener("click", () => {
+  running = !running;
+  toggleBtn.textContent = running ? "Pause" : "Resume";
+});
+
+resetBtn.addEventListener("click", () => {
+  initLBM();
+  initParticles(particleCount);
+});
+
+/* --- Start --- */
+
+initLBM();
+computeMacros();
+initParticles(particleCount);
+draw();
+requestAnimationFrame(loop);
+</script>
 </body>
 </html>
