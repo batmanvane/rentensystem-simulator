@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D LBM Blood Flow Sim</title>
+    <style> body { margin: 0; background: #000; } canvas { display: block; } </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 400; canvas.height = 200; // Render scale 2x
+        const NX = 200, NY = 100, NQ = 9; // D2Q9
+        const w = new Float32Array([4/9,1/9,1/9,1/9,1/9,1/36,1/36,1/36,1/36]);
+        const ex = new Int32Array([0,1,0,-1,0,1,-1,-1,1]);
+        const ey = new Int32Array([0,0,1,0,-1,1,1,-1,-1]);
+        let f = new Float32Array(NX * NY * NQ).fill(1/NQ); // Distributions
+        let obstacle = new Uint8Array(NX * NY).fill(0); // 0=fluid,1=wall
+        let rho, ux, uy; // Macros
+        let omega = 0.6; // Viscosity (relaxation)
+        let inletU = 0.05; // Poiseuille-like inlet
+        let mouseX=0, mouseY=0, adding=false;
+
+        function init() {
+            // Vessel walls (simple channel)
+            for (let i=0; i<NX; i++) {
+                obstacle[i] = obstacle[i + (NY-1)*NX] = 1; // Top/bottom walls
+            }
+            // Add initial "blood cells" (high density blobs)
+            for (let y=20; y<30; y++) for (let x=10; x<20; x++) {
+                let idx = (y*NX + x) * NQ;
+                f[idx] = 2; // Red cell clump
+            }
+            requestAnimationFrame(step);
+        }
+
+        function collide() {
+            rho = new Float32Array(NX*NY).fill(0);
+            ux = new Float32Array(NX*NY).fill(0);
+            uy = new Float32Array(NX*NY).fill(0);
+            for (let k=0; k<NQ; k++) {
+                for (let y=0; y<NY; y++) for (let x=0; x<NX; x++) {
+                    let i = y*NX + x;
+                    let idx = i * NQ + k;
+                    rho[i] += f[idx];
+                    ux[i] += f[idx] * ex[k];
+                    uy[i] += f[idx] * ey[k];
+                }
+            }
+            for (let y=0; y<NY; y++) for (let x=0; x<NX; x++) {
+                let i = y*NX + x;
+                if (obstacle[i]) continue;
+                let cu = ux[i]/rho[i], cu2 = cu*cu;
+                let feq = new Float32Array(NQ);
+                for (let k=0; k<NQ; k++) {
+                    let eu = ex[k]*cu;
+                    feq[k] = w[k] * rho[i] * (1 + 3*eu + 4.5*eu*eu - 1.5*cu2);
+                }
+                // Simple shear-thinning approx for blood (lower omega at high shear)
+                let shear = Math.sqrt((ux[i]-ux[Math.max(0,i-1)])**2 + (uy[i]-uy[Math.max(0,i-NX)])**2);
+                let omega_local = omega * (1 - 0.2 * Math.min(1, shear*100)); // Non-Newtonian
+                for (let k=0; k<NQ; k++) {
+                    let idx = i * NQ + k;
+                    f[idx] += omega_local * (feq[k] - f[idx]);
+                }
+            }
+        }
+
+        function stream() {
+            let fnew = new Float32Array(NX * NY * NQ);
+            for (let k=0; k<NQ; k++) {
+                for (let y=0; y<NY; y++) for (let x=0; x<NX; x++) {
+                    let xnew = x - ex[k], ynew = y - ey[k];
+                    if (xnew<0) { // Inlet: parabolic profile
+                        let u = inletU * (1 - ((ynew+ey[k])/NY)**2);
+                        let idxnew = (ynew*NX + x) * NQ + (k^8)%9; // Opposite direction
+                        fnew[(ynew*NX + x)*NQ + k] = rho[ynew*NX + x] * w[k] * (1 + 3*u*ex[k]);
+                        continue;
+                    }
+                    if (xnew>=NX || ynew<0 || ynew>=NY) continue;
+                    let idx = (ynew*NX + xnew) * NQ + k;
+                    fnew[(y*NX + x)*NQ + k] = f[idx];
+                }
+            }
+            f = fnew;
+            // Bounce-back for walls
+            for (let y=0; y<NY; y++) for (let x=0; x<NX; x++) {
+                if (obstacle[y*NX + x]) {
+                    for (let k=1; k<NQ; k++) {
+                        let xnew = x + ex[k], ynew = y + ey[k];
+                        if (xnew<0 || xnew>=NX || ynew<0 || ynew>=NY) continue;
+                        let idx = (ynew*NX + xnew)*NQ + (k^8)%9; // Opposite
+                        f[(y*NX + x)*NQ + k] = f[idx];
+                    }
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            for (let y=0; y<NY; y+=2) for (let x=0; x<NX; x+=2) { // Downsample
+                let i = y*NX + x;
+                let r = Math.min(255, rho[i]*5000); // Density -> red intensity
+                ctx.fillStyle = `rgb(${r},0,0)`;
+                ctx.fillRect(x*2, y*2, 2, 2);
+            }
+        }
+
+        function step() {
+            collide();
+            stream();
+            draw();
+            // Mouse interaction
+            if (adding) {
+                let x = Math.floor(mouseX/2), y = Math.floor(mouseY/2);
+                if (x>=0 && x<NX && y>=0 && y<NY) obstacle[y*NX + x] = 1;
+            }
+            requestAnimationFrame(step);
+        }
+
+        canvas.addEventListener('mousemove', e => {
+            mouseX = e.clientX; mouseY = e.clientY;
+        });
+        canvas.addEventListener('click', () => adding = !adding); // Toggle add obstacle/cell
+
+        init();
+    </script>
+</body>
+</html>
