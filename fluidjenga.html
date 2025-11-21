@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Icki Sticky Pudding Challenge</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #221122; font-family: 'Courier New', monospace; }
+        
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 20px; box-sizing: border-box;
+            z-index: 10;
+        }
+        
+        #score-board {
+            color: #ff99cc; font-size: 24px; font-weight: bold;
+            text-shadow: 2px 2px 0px #000;
+        }
+        
+        #com-indicator {
+            position: absolute; bottom: 100px; left: 50%; width: 200px; height: 20px;
+            transform: translateX(-50%); background: rgba(0,0,0,0.5);
+            border: 2px solid #555; border-radius: 10px; overflow: hidden;
+        }
+        #com-marker {
+            position: absolute; top: 0; left: 50%; width: 4px; height: 100%;
+            background: #00ff00; box-shadow: 0 0 8px #00ff00;
+            transition: left 0.2s ease-out;
+        }
+        #com-label {
+            text-align: center; color: #aaa; font-size: 12px; margin-top: 25px;
+        }
+
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center;
+            pointer-events: auto; z-index: 20; flex-direction: column;
+        }
+        h1 { color: #ff66aa; margin: 0; text-transform: uppercase; letter-spacing: 3px; }
+        p { color: #ddd; max-width: 300px; text-align: center; line-height: 1.5; }
+        button {
+            background: #ff66aa; border: none; padding: 15px 40px;
+            color: white; font-size: 18px; font-weight: bold; cursor: pointer;
+            border-radius: 5px; margin-top: 20px;
+        }
+        
+        .danger { background: #ff0000 !important; box-shadow: 0 0 10px red !important; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+
+<div id="ui-layer">
+    <div id="score-board">LAYERS: 0</div>
+    
+    <div id="com-wrapper">
+        <div id="com-indicator">
+            <div id="com-marker"></div>
+        </div>
+        <div id="com-label">Stability Monitor</div>
+    </div>
+</div>
+
+<div id="overlay">
+    <h1>Pudding Piling</h1>
+    <p>1. <b>Tilt</b> to slosh the pudding.<br>2. <b>Tap</b> to freeze the layer.<br>3. Don't let the stack topple!</p>
+    <button id="startBtn">Start Challenge</button>
+</div>
+
+<script>
+    // --- GAME CONFIG ---
+    const PUDDING_COLORS = [0x552200, 0xffaaee, 0xffffaa, 0xaaffaa]; // Choco, Strawberry, Vanilla, Pistachio
+    const LAYER_HEIGHT = 1.5;
+    const BASE_WIDTH = 8.0;
+    
+    // --- LBM CONFIG (The "Active" Layer) ---
+    const NX = 64; 
+    const NY = 64;
+    const Q = 9;
+    const VISCOSITY = 0.08; // Thick pudding
+    const OMEGA = 1.0 / (3.0 * VISCOSITY + 0.5);
+    
+    // LBM Arrays
+    const SIZE = NX * NY * Q;
+    let f = new Float32Array(SIZE);
+    let f_new = new Float32Array(SIZE);
+    let rho = new Float32Array(NX * NY);
+    let ux = new Float32Array(NX * NY);
+    let uy = new Float32Array(NX * NY);
+    
+    const w = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
+    const cx = [0, 1, 0, -1, 0, 1, -1, -1, 1];
+    const cy = [0, 0, 1, 0, -1, 1, 1, -1, -1];
+    const opposite = [0, 3, 4, 1, 2, 7, 8, 5, 6];
+
+    // Physics State
+    let gravityX = 0.0; 
+    let targetGravityX = 0.0;
+
+    // --- GAME STATE ---
+    let stack = []; // Stores { mass, x, mesh }
+    let currentLayerIndex = 0;
+    let isGameOver = false;
+    let isRunning = false;
+    let totalHeight = 0;
+
+    // --- THREE.JS ---
+    let scene, camera, renderer;
+    let activeMesh; // The mesh visualization of the LBM fluid
+    let stackGroup; // Container for frozen layers
+
+    // ==========================================
+    // 1. LBM SIMULATION (The "Active" Pudding)
+    // ==========================================
+    
+    function initLBM() {
+        // Create a blob in the center
+        for (let y = 0; y < NY; y++) {
+            for (let x = 0; x < NX; x++) {
+                const idx = y * NX + x;
+                const dx = x - NX/2;
+                const dy = y - NY/2;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                
+                let density = 1.0;
+                // Initial blob radius ~ 10
+                if (dist < 10) density = 2.2; 
+                
+                rho[idx] = density;
+                ux[idx] = 0; uy[idx] = 0;
+                for (let i = 0; i < Q; i++) f[idx*Q + i] = w[i] * density;
+            }
+        }
+    }
+
+    function stepLBM() {
+        // Only simulates lateral movement (X-axis) based on tilt
+        // We dampen Y gravity to keep it somewhat centered in the "tray"
+        gravityX += (targetGravityX - gravityX) * 0.1;
+
+        for (let y = 0; y < NY; y++) {
+            for (let x = 0; x < NX; x++) {
+                const idx = y * NX + x;
+                
+                // Compute macroscopic moments
+                let sumRho = 0, sumUx = 0, sumUy = 0;
+                for (let i=0; i<Q; i++) {
+                    let val = f[idx*Q + i];
+                    sumRho += val;
+                    sumUx += val * cx[i];
+                    sumUy += val * cy[i];
+                }
+                
+                rho[idx] = sumRho;
+                
+                // Add Gravity/Tilt Force
+                // We add a centering force on Y to keep the pudding in the "tray"
+                const centeringY = -(y - NY/2) * 0.0005; 
+                
+                sumUx += gravityX * sumRho;
+                sumUy += centeringY * sumRho;
+
+                let localUx = sumUx / sumRho;
+                let localUy = sumUy / sumRho;
+                
+                ux[idx] = localUx;
+                uy[idx] = localUy;
+
+                // Collision & Streaming
+                const u2 = localUx*localUx + localUy*localUy;
+                for (let i=0; i<Q; i++) {
+                    const cu = cx[i]*localUx + cy[i]*localUy;
+                    const feq = w[i]*sumRho * (1 + 3*cu + 4.5*cu*cu - 1.5*u2);
+                    const nextVal = f[idx*Q + i]*(1-OMEGA) + feq*OMEGA;
+                    
+                    const nx = x + cx[i];
+                    const ny = y + cy[i];
+                    
+                    if (nx>=0 && nx<NX && ny>=0 && ny<NY) {
+                        f_new[(ny*NX + nx)*Q + i] = nextVal;
+                    } else {
+                        f_new[idx*Q + opposite[i]] = nextVal; // Bounce
+                    }
+                }
+            }
+        }
+        let t = f; f = f_new; f_new = t;
+    }
+
+    // Calculate the center of mass of the CURRENT fluid simulation
+    // Returns X offset relative to center (-1 to 1 range)
+    function getFluidCentroid() {
+        let totalMass = 0;
+        let momentX = 0;
+        
+        for(let x=0; x<NX; x++) {
+            for(let y=0; y<NY; y++) {
+                // Only count "fluid" (density > threshold)
+                let d = rho[y*NX + x];
+                if (d > 1.5) {
+                    totalMass += d;
+                    momentX += d * x;
+                }
+            }
+        }
+        
+        if (totalMass === 0) return 0;
+        let avgX = momentX / totalMass;
+        // Map 0..NX to local world coordinates
+        return (avgX - NX/2) * 0.2; // Scaling factor to match ThreeJS world
+    }
+
+    // ==========================================
+    // 2. THREE.JS VISUALS
+    // ==========================================
+
+    function initThree() {
+        scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x221122, 0.02);
+
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 25);
+        camera.lookAt(0, 5, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Lights
+        const al = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(al);
+        const pl = new THREE.PointLight(0xffffff, 1, 100);
+        pl.position.set(10, 20, 20);
+        pl.castShadow = true;
+        scene.add(pl);
+
+        // Base Plate
+        const baseGeo = new THREE.CylinderGeometry(BASE_WIDTH/2, BASE_WIDTH/2, 1, 32);
+        const baseMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+        const base = new THREE.Mesh(baseGeo, baseMat);
+        base.position.y = -0.5;
+        base.receiveShadow = true;
+        scene.add(base);
+
+        // Container for the stack
+        stackGroup = new THREE.Group();
+        scene.add(stackGroup);
+
+        // Active Layer Mesh (The Fluid)
+        // We visualize the D2Q9 grid as a dynamic height map
+        const geo = new THREE.PlaneGeometry(BASE_WIDTH, BASE_WIDTH, NX-1, NY-1);
+        const mat = new THREE.MeshPhysicalMaterial({
+            color: PUDDING_COLORS[0],
+            transmission: 0.2, opacity: 0.9, transparent: true,
+            roughness: 0.2, metalness: 0.1, clearcoat: 1.0
+        });
+        activeMesh = new THREE.Mesh(geo, mat);
+        activeMesh.rotation.x = -Math.PI / 2; // Lay flat
+        activeMesh.position.y = LAYER_HEIGHT / 2; // Hover slightly
+        scene.add(activeMesh);
+    }
+
+    // Updates the vertices of the active mesh based on LBM density
+    function updateActiveMesh() {
+        const positions = activeMesh.geometry.attributes.position.array;
+        for (let i = 0; i < NX * NY; i++) {
+            // Map density to height
+            let d = rho[i];
+            let h = 0;
+            // Threshold to cut off "gas"
+            if (d > 1.2) {
+                h = (d - 1.2) * 3.0; // Height scaling
+            }
+            positions[i*3 + 2] = h;
+        }
+        activeMesh.geometry.attributes.position.needsUpdate = true;
+        activeMesh.geometry.computeVertexNormals();
+    }
+
+    // ==========================================
+    // 3. GAME LOGIC
+    // ==========================================
+
+    function getGlobalCenterOfMass() {
+        if (stack.length === 0) return 0;
+        
+        let totalMass = 0;
+        let weightedPos = 0;
+        
+        stack.forEach(layer => {
+            totalMass += layer.mass;
+            weightedPos += layer.mass * layer.x;
+        });
+        
+        return weightedPos / totalMass;
+    }
+
+    function freezeLayer() {
+        if (isGameOver) return;
+
+        // 1. Determine where the fluid is currently
+        const shiftX = getFluidCentroid();
+        
+        // 2. Create a static mesh representing the frozen pudding
+        const mat = activeMesh.material.clone();
+        // Make it look slightly deformed (pudding shape)
+        const geo = new THREE.SphereGeometry(LAYER_HEIGHT, 32, 16);
+        geo.scale(2.0, 0.6, 2.0); // Flatten sphere into a disc
+        
+        const mesh = new THREE.Mesh(geo, mat);
+        
+        // Position: On top of previous stack, shifted by fluid physics
+        const yPos = (stack.length * (LAYER_HEIGHT * 0.8)); // 0.8 for squish overlap
+        mesh.position.set(shiftX, yPos, 0);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        // Add randomness for "Wobble" visual
+        mesh.userData = { 
+            phase: Math.random() * Math.PI, 
+            speed: 2.0 + Math.random() 
+        };
+
+        stackGroup.add(mesh);
+        
+        // 3. Add to logic stack
+        stack.push({
+            mass: 10, // Assume uniform mass for simplicity
+            x: shiftX,
+            mesh: mesh
+        });
+
+        // 4. Check Stability
+        const comX = getGlobalCenterOfMass();
+        const limit = BASE_WIDTH / 2.5; // Slightly generous margin
+        
+        // Update UI Line
+        updateCOMDisplay(comX, limit);
+
+        if (Math.abs(comX) > limit) {
+            triggerGameOver(comX > 0 ? 1 : -1);
+        } else {
+            // Success! Next Layer
+            advanceLevel();
+        }
+    }
+
+    function advanceLevel() {
+        currentLayerIndex++;
+        document.getElementById('score-board').innerText = "LAYERS: " + currentLayerIndex;
+
+        // Move Camera Up
+        new TWEEN.Tween(camera.position)
+            .to({ y: camera.position.y + LAYER_HEIGHT, z: camera.position.z + 1 }, 1000)
+            .easing(TWEEN.Easing.Quadratic.Out)
+            .start();
+            
+        new TWEEN.Tween(camera.lookAt)
+             // Look slightly higher
+            .start();
+
+        // Move Active Mesh Up
+        activeMesh.position.y += (LAYER_HEIGHT * 0.8);
+        
+        // Reset Fluid for next pour
+        initLBM();
+        
+        // Change Color
+        const nextColor = PUDDING_COLORS[currentLayerIndex % PUDDING_COLORS.length];
+        activeMesh.material.color.setHex(nextColor);
+    }
+
+    function triggerGameOver(direction) {
+        isGameOver = true;
+        document.getElementById('com-marker').classList.add('danger');
+        document.getElementById('score-board').innerText = "TOPPLED!";
+        
+        // Topple Animation
+        // Rotate the whole stack group
+        new TWEEN.Tween(stackGroup.rotation)
+            .to({ z: -direction * Math.PI / 2.5 }, 1500)
+            .easing(TWEEN.Easing.Bounce.Out)
+            .start();
+
+        // Fall the active mesh
+        new TWEEN.Tween(activeMesh.position)
+            .to({ y: -10, x: direction * 10 }, 1000)
+            .start();
+            
+        setTimeout(() => {
+            alert("The pudding structure failed! Layers: " + currentLayerIndex);
+            location.reload();
+        }, 2500);
+    }
+
+    function updateCOMDisplay(comX, limit) {
+        const barWidth = 200; // px
+        const normalized = comX / (limit * 2); // -0.5 to 0.5 roughly
+        // Map to percentage (50% is center)
+        let pct = 50 + (normalized * 100);
+        
+        // Clamp for UI
+        if(pct < 0) pct = 0; if(pct > 100) pct = 100;
+        
+        const marker = document.getElementById('com-marker');
+        marker.style.left = pct + "%";
+        
+        // Color warning
+        if (Math.abs(comX) > limit * 0.8) {
+            marker.style.background = "red";
+            marker.style.boxShadow = "0 0 10px red";
+        } else {
+            marker.style.background = "#00ff00";
+            marker.style.boxShadow = "0 0 8px #00ff00";
+        }
+    }
+
+    // ==========================================
+    // 4. INPUT & LOOP
+    // ==========================================
+
+    function animate(time) {
+        requestAnimationFrame(animate);
+        TWEEN.update(time);
+        
+        if (!isRunning) return;
+
+        if (!isGameOver) {
+            stepLBM();
+            stepLBM();
+            updateActiveMesh();
+            
+            // Visual Wobble of frozen layers
+            stack.forEach(layer => {
+                const s = Math.sin(time * 0.005 * layer.mesh.userData.speed + layer.mesh.userData.phase);
+                // Subtle scaling to look like jelly breathing
+                layer.mesh.scale.set(2.0 + s*0.05, 0.6 - s*0.02, 2.0 + s*0.05);
+            });
+            
+            // Real-time CoM calculation (including the moving fluid!)
+            // To make it harder, we include the active fluid in the calculation visually
+            let currentFluidX = getFluidCentroid();
+            let globalCoM = getGlobalCenterOfMass();
+            // Simple weighted average for UI visualization of "Impending Doom"
+            let combinedCoM = (globalCoM * stack.length + currentFluidX) / (stack.length + 1);
+            updateCOMDisplay(combinedCoM, BASE_WIDTH/2.5);
+        }
+        
+        renderer.render(scene, camera);
+    }
+
+    // Controls
+    function handleOrientation(event) {
+        if(isGameOver) return;
+        let x = event.gamma || 0; 
+        if (x > 25) x = 25; if (x < -25) x = -25;
+        targetGravityX = (x / 25) * 0.02;
+    }
+
+    function handleMouseMove(e) {
+        if(isGameOver) return;
+        // Desktop testing
+        const x = (e.clientX / window.innerWidth) * 2 - 1;
+        targetGravityX = x * 0.02;
+    }
+    
+    function handleTap() {
+        if(isRunning && !isGameOver) {
+            freezeLayer();
+        }
+    }
+
+    document.getElementById('startBtn').addEventListener('click', () => {
+        // Permission check for iOS 13+
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+                })
+                .catch(console.error);
+        } else {
+            window.addEventListener('deviceorientation', handleOrientation);
+        }
+        
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('touchstart', handleTap);
+        window.addEventListener('mousedown', handleTap);
+
+        document.getElementById('overlay').style.display = 'none';
+        isRunning = true;
+        initThree();
+        initLBM();
+        animate();
+    });
+
+    window.addEventListener('resize', () => {
+        if(camera) {
+            camera.aspect = window.innerWidth/window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    });
+
+</script>
+</body>
+</html>
