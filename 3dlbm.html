@@ -182,8 +182,8 @@
                 // Mouse Interaction (Add Velocity)
                 float d = distance(currentPos, vec3(0.5, 0.5, 0.5));
                 if(d < 0.1 && length(mouseVel) > 0.0) {
-                   u += mouseVel * 2.0;
-                   rho += 0.1;
+                   u += mouseVel;
+                   // rho += 0.1;
                 }
                 
                 // Simple boundary bounce-back approximation (density preservation)
