@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>3D LBM Fluid on Mobile</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+        #info {
+            position: absolute; top: 10px; width: 100%; text-align: center;
+            color: white; font-family: sans-serif; pointer-events: none;
+            text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">3D LBM (D3Q15)<br>32x32x32 Grid &bull; WebGL2 MRT</div>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- CONFIGURATION ---
+        const SIZE = 32;            // Simulation Grid Size (32^3)
+        const ATLAS_COLS = 8;       // Atlas columns (8 * 32 = 256 width)
+        const ATLAS_ROWS = 4;       // Atlas rows    (4 * 32 = 128 height)
+        // Texture size: 256x128. This is tiny for a GPU, ensuring high FPS.
+        
+        const SIM_RES_X = SIZE * ATLAS_COLS;
+        const SIM_RES_Y = SIZE * ATLAS_ROWS;
+
+        // --- SHADER CHUNKS ---
+        // Helper to map 3D coordinates (0..1) to 2D Atlas UVs
+        const shaderCommon = `
+            precision highp float;
+            precision highp sampler2D;
+
+            // Grid settings hardcoded for performance
+            #define SIZE 32.0
+            #define ATLAS_COLS 8.0
+            #define ATLAS_ROWS 4.0
+            #define RES_X 256.0
+            #define RES_Y 128.0
+
+            // Map 3D UVW (0-1) to Atlas UV (0-1)
+            vec2 uv3Dto2D(vec3 uvw) {
+                // Snap to nearest voxel center to avoid bleeding
+                vec3 voxel = floor(uvw * SIZE);
+                
+                // Clamp to ensure we don't read outside
+                voxel = clamp(voxel, vec3(0.0), vec3(SIZE - 1.0));
+
+                float zIndex = voxel.z;
+                float col = mod(zIndex, ATLAS_COLS);
+                float row = floor(zIndex / ATLAS_COLS);
+
+                // Offset within the slice
+                vec2 sliceOffset = vec2(col * SIZE, row * SIZE);
+                vec2 pixelPos = sliceOffset + voxel.xy + 0.5; // +0.5 for center sampling
+
+                return pixelPos / vec2(RES_X, RES_Y);
+            }
+        `;
+
+        // --- LBM SIMULATION SHADER ---
+        const simFrag = `
+            ${shaderCommon}
+            
+            // 4 Textures to hold 15 distributions (D3Q15)
+            // We store f0..f14.
+            // T0: f0, f1, f2, f3
+            // T1: f4, f5, f6, f7
+            // T2: f8, f9, f10, f11
+            // T3: f12, f13, f14, unused
+            
+            uniform sampler2D t0, t1, t2, t3;
+            uniform vec3 mouseVel;
+            uniform vec3 mousePos;
+            uniform float dt;
+
+            // MRT Outputs
+            layout(location = 0) out vec4 out0;
+            layout(location = 1) out vec4 out1;
+            layout(location = 2) out vec4 out2;
+            layout(location = 3) out vec4 out3;
+
+            // D3Q15 Lattice Vectors (e_i)
+            // 0: (0,0,0)
+            // 1-6: (+-1, 0, 0) ...
+            // 7-14: (+-1, +-1, +-1) corners
+            const vec3 e[15] = vec3[](
+                vec3(0,0,0),
+                vec3(1,0,0), vec3(-1,0,0), vec3(0,1,0), vec3(0,-1,0), vec3(0,0,1), vec3(0,0,-1),
+                vec3(1,1,1), vec3(-1,1,1), vec3(1,-1,1), vec3(-1,-1,1),
+                vec3(1,1,-1), vec3(-1,1,-1), vec3(1,-1,-1), vec3(-1,-1,-1)
+            );
+
+            // Weights w_i
+            // Center: 2/9, Face: 1/9, Corner: 1/72
+            const float w0 = 2.0/9.0;
+            const float w1 = 1.0/9.0;
+            const float w2 = 1.0/72.0;
+            const float weights[15] = float[](
+                w0, w1, w1, w1, w1, w1, w1,
+                w2, w2, w2, w2, w2, w2, w2, w2
+            );
+
+            void main() {
+                // 1. Determine which voxel (x,y,z) we are rendering
+                vec2 uv = gl_FragCoord.xy / vec2(RES_X, RES_Y);
+                
+                // Reverse map 2D UV to 3D integer coordinates
+                float col = floor(gl_FragCoord.x / SIZE);
+                float row = floor(gl_FragCoord.y / SIZE);
+                float z = row * ATLAS_COLS + col;
+                float x = mod(gl_FragCoord.x, SIZE);
+                float y = mod(gl_FragCoord.y, SIZE);
+                
+                vec3 currentPos = vec3(x, y, z) / SIZE; // normalized 0-1
+
+                // 2. STREAMING STEP
+                // We pull values from neighbors *opposite* to the lattice vector
+                // e.g., to get f_i at x, we read f_i from x - e_i
+                
+                float f[15];
+                
+                // Unpack and Stream
+                // Note: We must handle boundaries (clamp or wrap). We use clamp in uv3Dto2D.
+                
+                for(int i=0; i<15; i++) {
+                    vec3 neighborPos = currentPos - (e[i] / SIZE);
+                    vec2 sampleUV = uv3Dto2D(neighborPos);
+                    
+                    // Read the correct channel from the correct texture
+                    // Ideally we'd optimize this read, but for clarity we branch lightly or just read all
+                    // Optimization: Read all 4 texels once per coordinate?
+                    // For simplicity in this example, we read the specific texture.
+                    
+                    vec4 s0 = texture(t0, sampleUV);
+                    vec4 s1 = texture(t1, sampleUV);
+                    vec4 s2 = texture(t2, sampleUV);
+                    vec4 s3 = texture(t3, sampleUV);
+                    
+                    if(i==0) f[0] = s0.r;
+                    else if(i==1) f[1] = s0.g;
+                    else if(i==2) f[2] = s0.b;
+                    else if(i==3) f[3] = s0.a;
+                    else if(i==4) f[4] = s1.r;
+                    else if(i==5) f[5] = s1.g;
+                    else if(i==6) f[6] = s1.b;
+                    else if(i==7) f[7] = s1.a;
+                    else if(i==8) f[8] = s2.r;
+                    else if(i==9) f[9] = s2.g;
+                    else if(i==10) f[10] = s2.b;
+                    else if(i==11) f[11] = s2.a;
+                    else if(i==12) f[12] = s3.r;
+                    else if(i==13) f[13] = s3.g;
+                    else if(i==14) f[14] = s3.b;
+                }
+
+                // 3. MACROSCOPIC QUANTITIES (Rho, u)
+                float rho = 0.0;
+                vec3 u = vec3(0.0);
+                
+                for(int i=0; i<15; i++) {
+                    rho += f[i];
+                    u += e[i] * f[i];
+                }
+                // Avoid division by zero
+                if (rho > 0.0) u /= rho;
+
+                // Mouse Interaction (Add Velocity)
+                float d = distance(currentPos, vec3(0.5, 0.5, 0.5));
+                if(d < 0.1 && length(mouseVel) > 0.0) {
+                   u += mouseVel * 2.0;
+                   rho += 0.1;
+                }
+                
+                // Simple boundary bounce-back approximation (density preservation)
+                // If near wall, dampen velocity
+                if(x < 0.5 || x > SIZE-1.5 || y < 0.5 || y > SIZE-1.5 || z < 0.5 || z > SIZE-1.5) {
+                    u = vec3(0.0);
+                }
+
+                // 4. COLLISION STEP (BGK)
+                // f_eq = w_i * rho * (1 + 3(e.u) + 4.5(e.u)^2 - 1.5(u.u))
+                
+                float omega = 1.6; // Relaxation parameter (1/tau), 1.0 - 2.0
+                float uSqu = dot(u, u);
+                
+                for(int i=0; i<15; i++) {
+                    float eu = dot(e[i], u);
+                    float feq = weights[i] * rho * (1.0 + 3.0*eu + 4.5*eu*eu - 1.5*uSqu);
+                    f[i] = mix(f[i], feq, omega);
+                }
+
+                // 5. OUTPUT
+                out0 = vec4(f[0], f[1], f[2], f[3]);
+                out1 = vec4(f[4], f[5], f[6], f[7]);
+                out2 = vec4(f[8], f[9], f[10], f[11]);
+                out3 = vec4(f[12], f[13], f[14], 1.0);
+            }
+        `;
+
+        // --- VOLUMETRIC DISPLAY SHADER ---
+        const visFrag = `
+            ${shaderCommon}
+            varying vec2 vUv;
+            uniform sampler2D t0, t1, t2, t3; // We only really need t0-t3 to reconstruct density
+
+            // Get Density at 3D position
+            float getDensity(vec3 pos) {
+                vec2 uv = uv3Dto2D(pos);
+                // Reconstruct rho sum(f0..f14)
+                // Sampling 4 textures inside a raymarch loop is expensive. 
+                // APPROXIMATION: Just use f0 (rest particle) * scale, or f0+f1..
+                // For speed on mobile, we sum the first texture (f0..f3). 
+                // This is usually sufficient to visualize the "cloud".
+                vec4 s0 = texture(t0, uv);
+                return s0.r + s0.g + s0.b + s0.a; 
+            }
+
+            void main() {
+                // Raymarch through the cube
+                vec3 rayDir = normalize(vUv.x * vec3(1,0,0) + vUv.y * vec3(0,1,0) + vec3(0,0,1)); // Placeholder
+                // Actually, we render a cube geometry. 
+                // We need ray origin and direction in local space.
+                // For this demo, we map the cube faces directly to the volume (Simple Slicing) or Raycasting?
+                
+                // Let's do a simple "Max Intensity Projection" style along the Z-axis of the view would be complex.
+                // SIMPLIFIED VISUALIZATION:
+                // We render the BACK face of the cube.
+                // We raymarch from front to back in View Space.
+                
+                // Since this is a simple example, let's do a direct volume lookup based on world position 
+                // assuming the cube is at 0,0,0 with size 1.
+                
+                // Actually, standard Three.js approach:
+                // The mesh is a Cube. The fragments are on the surface.
+                // We'll just use a "Volume Cloud" shader on the cube geometry.
+                
+                // Simple Raymarcher:
+                vec3 rayStep = normalize(viewVector) * 0.03; 
+                vec3 pos = vOrigin; 
+                float dens = 0.0;
+                
+                for(int i=0; i<32; i++) {
+                    pos += rayStep;
+                    if(pos.x < 0.0 || pos.x > 1.0 || pos.y < 0.0 || pos.y > 1.0 || pos.z < 0.0 || pos.z > 1.0) break;
+                    
+                    float d = getDensity(pos);
+                    dens += d * 0.05; // Accumulate
+                }
+                
+                // Colorize
+                vec3 col = vec3(0.1, 0.4, 1.0) * dens * 2.0;
+                gl_FragColor = vec4(col, 1.0);
+            }
+        `;
+        
+        // Actually, a simpler visualizer for mobile is to draw a few 2D slices.
+        // Let's use a "Slice" shader that draws 3 intersecting planes.
+        
+        const sliceFrag = `
+            ${shaderCommon}
+            varying vec3 vPos; // 0 to 1
+            uniform sampler2D t0, t1, t2, t3;
+
+            void main() {
+                vec2 uv = uv3Dto2D(vPos);
+                
+                // Calculate Density
+                vec4 s0 = texture(t0, uv);
+                vec4 s1 = texture(t1, uv);
+                vec4 s2 = texture(t2, uv);
+                vec4 s3 = texture(t3, uv);
+                
+                float rho = dot(s0, vec4(1.0)) + dot(s1, vec4(1.0)) + dot(s2, vec4(1.0)) + dot(s3.rgb, vec3(1.0));
+                
+                // Map density to color (Heatmap: Blue -> Red)
+                // Rho is around 1.0 at rest. Variations are small.
+                float val = (rho - 0.9) * 3.0; 
+                
+                vec3 color = mix(vec3(0,0,0.5), vec3(0,1,1), clamp(val, 0.0, 0.5) * 2.0);
+                color = mix(color, vec3(1,1,0), clamp(val - 0.5, 0.0, 0.5) * 2.0);
+                
+                // Transparency based on deviation from 1.0
+                float alpha = smoothstep(0.02, 0.1, abs(rho - 1.0)) * 0.8 + 0.2;
+                
+                gl_FragColor = vec4(color, alpha);
+            }
+        `;
+
+        const sliceVert = `
+            varying vec3 vPos;
+            void main() {
+                vPos = position + 0.5; // Map -0.5..0.5 to 0..1
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+
+        // --- MAIN INIT ---
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio > 2 ? 2 : window.devicePixelRatio); // Cap pixel ratio for mobile
+        document.body.appendChild(renderer.domElement);
+
+        if (!renderer.capabilities.isWebGL2) {
+            alert("WebGL2 is required for this simulation.");
+        }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+        camera.position.set(1.5, 1.5, 2.0);
+        
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // --- SETUP MRT ---
+        const rtSettings = {
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
+            type: THREE.FloatType, // Standard LBM needs Floats
+            format: THREE.RGBAFormat,
+        };
+
+        // We need Ping-Pong buffers (Read Buffer -> Write Buffer)
+        // Each buffer has 4 textures (attachments)
+        const createBundle = () => new THREE.WebGLMultipleRenderTargets(
+            SIM_RES_X, 
+            SIM_RES_Y, 
+            4, 
+            rtSettings
+        );
+
+        let simBufferA = createBundle();
+        let simBufferB = createBundle();
+
+        // Initialize State (Density = 1.0, Vel = 0)
+        // We can just leave them empty (0), but LBM needs rho=1. 
+        // We'll inject rho=1 in the first frame or clear with 1.
+        // For simplicity: The shader's "mouse interaction" will wake it up, 
+        // but strictly we should init. We'll assume 0 density is vacuum and inject mass.
+        // Actually, let's init with a simple quad render in init().
+
+        // --- SIMULATION MESH ---
+        // A full-screen quad to run the simulation shader
+        const simMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                t0: { value: null },
+                t1: { value: null },
+                t2: { value: null },
+                t3: { value: null },
+                mouseVel: { value: new THREE.Vector3(0,0,0) },
+                mousePos: { value: new THREE.Vector3(0,0,0) },
+                dt: { value: 1.0 }
+            },
+            vertexShader: `
+                void main() { gl_Position = vec4( position, 1.0 ); }
+            `,
+            fragmentShader: simFrag,
+            glslVersion: THREE.GLSL3
+        });
+        
+        const simGeometry = new THREE.PlaneGeometry(2, 2);
+        const simMesh = new THREE.Mesh(simGeometry, simMaterial);
+        const simScene = new THREE.Scene();
+        simScene.add(simMesh);
+        const simCamera = new THREE.Camera();
+
+        // --- VISUALIZATION MESH ---
+        // 3 Intersecting planes to see the volume slices
+        const visGroup = new THREE.Group();
+        const planeGeo = new THREE.PlaneGeometry(1, 1);
+        const visMat = new THREE.ShaderMaterial({
+            uniforms: {
+                t0: { value: null },
+                t1: { value: null },
+                t2: { value: null },
+                t3: { value: null },
+            },
+            vertexShader: sliceVert,
+            fragmentShader: sliceFrag,
+            side: THREE.DoubleSide,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        const p1 = new THREE.Mesh(planeGeo, visMat);
+        const p2 = new THREE.Mesh(planeGeo, visMat); p2.rotation.x = Math.PI/2;
+        const p3 = new THREE.Mesh(planeGeo, visMat); p3.rotation.y = Math.PI/2;
+        
+        // Add a box helper
+        const box = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)), 
+            new THREE.LineBasicMaterial({color: 0x444444})
+        );
+        
+        visGroup.add(p1, p2, p3, box);
+        scene.add(visGroup);
+
+        // --- INIT STATE ---
+        // We need to fill the textures with Equilibrium f_i for rho=1, u=0.
+        // Simplest way: Run the shader with a specific "init" flag or just let it stabilize.
+        // We'll just let the "vacuum" fill up by adding a source in the center in the shader? 
+        // No, standard LBM explodes if rho=0.
+        // Let's clear buffers to color (rho/15, rho/15...)
+        // 1.0 / 15 = 0.066
+        renderer.setClearColor(new THREE.Color(0.066, 0.066, 0.066), 1);
+        renderer.setRenderTarget(simBufferA);
+        renderer.clear();
+        renderer.setRenderTarget(simBufferB);
+        renderer.clear();
+        renderer.setClearColor(0x000000, 1); // Reset
+
+        // --- INTERACTION ---
+        let time = 0;
+        const clock = new THREE.Clock();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const dt = clock.getDelta();
+            time += dt;
+
+            // 1. SIMULATION STEP
+            // Ping: Read A, Write B
+            simMesh.material.uniforms.t0.value = simBufferA.texture[0];
+            simMesh.material.uniforms.t1.value = simBufferA.texture[1];
+            simMesh.material.uniforms.t2.value = simBufferA.texture[2];
+            simMesh.material.uniforms.t3.value = simBufferA.texture[3];
+            
+            // Inject pulse at center periodically
+            const pulse = Math.sin(time * 2.0);
+            simMesh.material.uniforms.mouseVel.value.set(pulse * 0.5, 0, 0);
+
+            renderer.setRenderTarget(simBufferB);
+            renderer.render(simScene, simCamera);
+
+            // Pong: Read B, Write A
+            simMesh.material.uniforms.t0.value = simBufferB.texture[0];
+            simMesh.material.uniforms.t1.value = simBufferB.texture[1];
+            simMesh.material.uniforms.t2.value = simBufferB.texture[2];
+            simMesh.material.uniforms.t3.value = simBufferB.texture[3];
+
+            renderer.setRenderTarget(simBufferA);
+            renderer.render(simScene, simCamera);
+
+            // 2. VISUALIZATION
+            renderer.setRenderTarget(null);
+            
+            // Update visualizer uniforms
+            visMat.uniforms.t0.value = simBufferA.texture[0];
+            visMat.uniforms.t1.value = simBufferA.texture[1];
+            visMat.uniforms.t2.value = simBufferA.texture[2];
+            visMat.uniforms.t3.value = simBufferA.texture[3];
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
