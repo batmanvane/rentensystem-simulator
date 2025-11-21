@@ -3,62 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D LBM Mobile Fluid</title>
+    <title>LBM Droplet UX</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', sans-serif; }
         #overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; justify-content: center; align-items: center;
-            background: rgba(0,0,0,0.8); color: white; z-index: 10;
-            flex-direction: column; text-align: center;
+            background: rgba(0,0,0,0.6); color: white; z-index: 10;
+            flex-direction: column; text-align: center; backdrop-filter: blur(5px);
         }
+        h1 { margin-bottom: 5px; font-weight: 300; letter-spacing: 2px; }
+        p { color: #aaa; font-size: 14px; margin-bottom: 30px; }
         button {
-            padding: 15px 30px; font-size: 18px; background: #00d2ff;
-            border: none; border-radius: 5px; color: #000; cursor: pointer; margin-top: 20px;
+            padding: 18px 40px; font-size: 16px; background: white;
+            border: none; border-radius: 30px; color: #000; cursor: pointer; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.1s;
+            font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
         }
-        #stats { position: absolute; top: 10px; left: 10px; color: #00d2ff; font-size: 12px; z-index: 5; pointer-events: none;}
+        button:active { transform: scale(0.95); }
+        #hint { 
+            position: absolute; bottom: 30px; width: 100%; text-align: center; 
+            color: rgba(255,255,255,0.3); pointer-events: none; font-size: 12px;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<div id="stats">Tilt your phone to move fluid.<br>Debug: <span id="debug">Waiting...</span></div>
+<div id="hint">Hold Phone Flat • Tilt Gently</div>
 
 <div id="overlay">
     <div>
-        <h1>Fluid Sim</h1>
-        <p>Requires Gyroscope Access</p>
-        <button id="startBtn">Start Simulation</button>
+        <h1>LIQUID UX</h1>
+        <p>Interactive Surface Demo</p>
+        <button id="startBtn">Initialize</button>
     </div>
 </div>
 
 <script>
     // --- CONFIGURATION ---
-    // Grid size (Keep low for mobile CPU performance)
     const NX = 64; 
     const NY = 64;
-    const Q = 9; // D2Q9 model
-    const VISCOSITY = 0.02;
-    const OMEGA = 1.0 / (3.0 * VISCOSITY + 0.5); // Relaxation parameter
+    const Q = 9; 
+    // Lower viscosity = more splashy, Higher = more honey-like
+    // 0.03 is a good balance for water-like movement
+    const VISCOSITY = 0.03; 
+    const OMEGA = 1.0 / (3.0 * VISCOSITY + 0.5);
 
-    // Arrays for LBM (Using 1D Flat Float32Arrays for speed)
-    // Indexing: (y * NX + x) * Q + direction
+    // --- LBM VARIABLES ---
     const SIZE = NX * NY * Q;
     let f = new Float32Array(SIZE);
     let f_new = new Float32Array(SIZE);
-    let rho = new Float32Array(NX * NY); // Density
-    let ux = new Float32Array(NX * NY);  // Velocity X
-    let uy = new Float32Array(NX * NY);  // Velocity Y
+    let rho = new Float32Array(NX * NY); 
+    let ux = new Float32Array(NX * NY);  
+    let uy = new Float32Array(NX * NY);  
 
-    // LBM Weights and Vectors (D2Q9)
+    // Weights and Vectors (D2Q9)
     const w = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
     const cx = [0, 1, 0, -1, 0, 1, -1, -1, 1];
     const cy = [0, 0, 1, 0, -1, 1, 1, -1, -1];
-    const opposite = [0, 3, 4, 1, 2, 7, 8, 5, 6]; // Opposite directions for bounce-back
+    const opposite = [0, 3, 4, 1, 2, 7, 8, 5, 6]; 
 
     // Physics State
     let gravityX = 0.0;
     let gravityY = 0.0;
+    
+    // Smoothing variables (Lerp)
+    let targetGravityX = 0.0;
+    let targetGravityY = 0.0;
     let running = false;
 
     // --- 1. INITIALIZATION ---
@@ -66,17 +79,23 @@
         for (let y = 0; y < NY; y++) {
             for (let x = 0; x < NX; x++) {
                 const idx = y * NX + x;
-                // Initial blob in the center
+                
+                // Create a Gaussian Drop in the center
                 const dx = x - NX/2;
                 const dy = y - NY/2;
-                const initialRho = (dx*dx + dy*dy < 100) ? 2.0 : 1.0;
+                const distSq = dx*dx + dy*dy;
                 
+                // Drop radius approx 10-12 grid units
+                let initialRho = 1.0;
+                if (distSq < 100) {
+                    // Smooth hump
+                    initialRho += 1.5 * Math.exp(-distSq / 50);
+                }
+
                 rho[idx] = initialRho;
                 ux[idx] = 0;
                 uy[idx] = 0;
 
-                // Calculate Equilibrium
-                const u2 = 0; // Velocity squared (0 initially)
                 for (let i = 0; i < Q; i++) {
                     f[idx * Q + i] = w[i] * initialRho;
                 }
@@ -84,14 +103,17 @@
         }
     }
 
-    // --- 2. LBM CORE LOOP ---
+    // --- 2. PHYSICS LOOP ---
     function stepLBM() {
-        // A. Stream & Collide
+        // 1. Smooth Gravity Input (Low Pass Filter)
+        // This removes the "jitter" and makes it feel heavy
+        gravityX += (targetGravityX - gravityX) * 0.1;
+        gravityY += (targetGravityY - gravityY) * 0.1;
+
         for (let y = 0; y < NY; y++) {
             for (let x = 0; x < NX; x++) {
                 const idx = y * NX + x;
                 
-                // Compute macroscopic (Density & Velocity) from current f
                 let sumRho = 0;
                 let sumUx = 0;
                 let sumUy = 0;
@@ -105,99 +127,112 @@
 
                 rho[idx] = sumRho;
                 
-                // Add Gravity Force
+                // Force Application
                 sumUx += gravityX * sumRho;
                 sumUy += gravityY * sumRho;
 
-                ux[idx] = sumUx / sumRho;
-                uy[idx] = sumUy / sumRho;
+                const localUx = sumUx / sumRho;
+                const localUy = sumUy / sumRho;
 
-                // Collision (BGK Operator)
-                const localRho = sumRho;
-                const localUx = ux[idx];
-                const localUy = uy[idx];
+                ux[idx] = localUx;
+                uy[idx] = localUy;
+
                 const u2 = localUx * localUx + localUy * localUy;
 
                 for (let i = 0; i < Q; i++) {
                     const cidotU = cx[i] * localUx + cy[i] * localUy;
-                    
-                    // Equilibrium distribution function
-                    const feq = w[i] * localRho * (1 + 3 * cidotU + 4.5 * cidotU * cidotU - 1.5 * u2);
-                    
-                    // Relaxation
+                    const feq = w[i] * sumRho * (1 + 3 * cidotU + 4.5 * cidotU * cidotU - 1.5 * u2);
                     const postCollision = f[idx * Q + i] * (1 - OMEGA) + feq * OMEGA;
 
-                    // B. Streaming (Propagate to neighbors)
                     const nextX = x + cx[i];
                     const nextY = y + cy[i];
 
                     if (nextX >= 0 && nextX < NX && nextY >= 0 && nextY < NY) {
-                        const nextIdx = nextY * NX + nextX;
-                        f_new[nextIdx * Q + i] = postCollision;
+                        f_new[(nextY * NX + nextX) * Q + i] = postCollision;
                     } else {
-                        // Simple Bounce-back (Walls)
-                        // Reflects back to the current cell, but in opposite direction
-                        // We write to f_new of current cell (idx) at opposite direction
                         f_new[idx * Q + opposite[i]] = postCollision;
                     }
                 }
             }
         }
-
-        // Swap arrays
-        let temp = f;
-        f = f_new;
-        f_new = temp;
+        
+        let temp = f; f = f_new; f_new = temp;
     }
 
-    // --- 3. VISUALIZATION (Three.js) ---
+    // --- 3. THREE.JS VISUALIZATION ---
     const scene = new THREE.Scene();
-    // Camera setup
+    // scene.background = new THREE.Color(0x111111);
+    scene.fog = new THREE.FogExp2(0x111111, 0.015);
+
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, -60, 50); // Look from an angle
+    camera.position.set(0, -60, 60);
     camera.lookAt(0, 0, 0);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0x404040);
+    // --- Lighting (Crucial for Liquid Look) ---
+    const ambientLight = new THREE.AmbientLight(0x404040, 1);
     scene.add(ambientLight);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-    dirLight.position.set(10, -10, 20);
+
+    // Blue point light from one side
+    const pLight1 = new THREE.PointLight(0x0088ff, 2, 100);
+    pLight1.position.set(20, 20, 30);
+    scene.add(pLight1);
+
+    // White rim light
+    const pLight2 = new THREE.PointLight(0xffffff, 1, 100);
+    pLight2.position.set(-20, -20, 30);
+    scene.add(pLight2);
+
+    // Directional Shadow Caster
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    dirLight.position.set(0, -50, 100);
+    dirLight.castShadow = true;
     scene.add(dirLight);
 
-    // Fluid Mesh (Plane with Vertex Displacement)
+    // --- The Liquid Mesh ---
     const geometry = new THREE.PlaneGeometry(NX, NY, NX - 1, NY - 1);
-    const material = new THREE.MeshPhongMaterial({ 
-        color: 0x00d2ff, 
-        shininess: 90,
-        wireframe: false,
-        flatShading: true,
-        side: THREE.DoubleSide
-    });
-    const plane = new THREE.Mesh(geometry, material);
-    scene.add(plane);
     
-    // Container Box (Visual helper)
-    const boxGeo = new THREE.BoxGeometry(NX, NY, 5);
-    const boxMat = new THREE.MeshBasicMaterial({ color: 0x333333, wireframe: true, transparent: true, opacity: 0.3 });
-    const box = new THREE.Mesh(boxGeo, boxMat);
-    box.position.z = -2.5;
-    scene.add(box);
+    // Physical Material for "Glossy Droplet" look
+    const material = new THREE.MeshPhysicalMaterial({ 
+        color: 0x00aaff, 
+        metalness: 0.1,
+        roughness: 0.1,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.1,
+        transmission: 0.2, // Slight transparency
+        opacity: 0.9,
+        transparent: true,
+        side: THREE.DoubleSide,
+        flatShading: false
+    });
 
+    const plane = new THREE.Mesh(geometry, material);
+    plane.castShadow = true;
+    plane.receiveShadow = true;
+    scene.add(plane);
+
+    // --- Update Mesh Vertices ---
     function updateVisuals() {
         const positions = plane.geometry.attributes.position.array;
-        // 3 values per vertex (x, y, z)
-        // The plane geometry is created row by row
         
         for (let i = 0; i < NX * NY; i++) {
-            // Map Density to Z-height
-            // Standard density is 1.0. We amplify deviations.
-            const h = (rho[i] - 1.0) * 15.0; 
+            let d = rho[i];
             
-            // Update the Z coordinate (index 2, 5, 8...)
+            // VISUAL TRICK: Thresholding
+            // If density is close to 1.0 (air), force it to 0 height.
+            // This hides the "gas" and only shows the "liquid".
+            const threshold = 1.05;
+            let h = 0;
+            
+            if (d > threshold) {
+                // Smoothstep-like transition for rounded edges
+                h = (d - threshold) * 25.0;
+            }
+
             positions[i * 3 + 2] = h; 
         }
         
@@ -205,81 +240,68 @@
         plane.geometry.computeVertexNormals();
     }
 
-    // --- 4. GYROSCOPE & INTERACTION ---
+    // --- 4. INTERACTION ---
     function handleOrientation(event) {
-        // Beta: Front to Back tilt (-180 to 180) -> Controls Y gravity
-        // Gamma: Left to Right tilt (-90 to 90) -> Controls X gravity
-        
-        let x = event.gamma || 0; // -90 to 90
-        let y = event.beta || 0;  // -180 to 180
+        let x = event.gamma || 0; 
+        let y = event.beta || 0;  
 
-        // Clamp and Normalize
-        const maxTilt = 45;
-        if (x > maxTilt) x = maxTilt;
-        if (x < -maxTilt) x = -maxTilt;
-        if (y > maxTilt) y = maxTilt;
-        if (y < -maxTilt) y = -maxTilt;
+        // Clamp Max Tilt (Prevent extreme forces)
+        const maxTilt = 25; 
+        if (x > maxTilt) x = maxTilt; if (x < -maxTilt) x = -maxTilt;
+        if (y > maxTilt) y = maxTilt; if (y < -maxTilt) y = -maxTilt;
 
-        // Update simulation gravity
-        // Scale factor 0.005 determines sensitivity
-        gravityX = (x / maxTilt) * 0.005;
-        gravityY = -(y / maxTilt) * 0.005; // Invert Y usually feels more natural
-
-        document.getElementById('debug').innerText = 
-            `Gx: ${gravityX.toFixed(4)} Gy: ${gravityY.toFixed(4)}`;
+        // SENSITIVITY ADJUSTMENT:
+        // Reduced multiplier significantly (0.005 -> 0.0015)
+        // We set a TARGET, and the physics loop Lerps towards it (Smoothing)
+        targetGravityX = (x / maxTilt) * 0.0015;
+        targetGravityY = -(y / maxTilt) * 0.0015;
     }
 
     function requestAccess() {
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            // iOS 13+ needs permission
             DeviceOrientationEvent.requestPermission()
                 .then(response => {
                     if (response === 'granted') {
                         window.addEventListener('deviceorientation', handleOrientation);
                         startSim();
                     } else {
-                        alert("Permission denied. Cannot use Gyro.");
+                        alert("Gyroscope permission required for interaction.");
                     }
                 })
                 .catch(console.error);
         } else {
-            // Android / non-iOS
             window.addEventListener('deviceorientation', handleOrientation);
             startSim();
         }
     }
 
     function startSim() {
-        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('overlay').style.opacity = '0';
+        setTimeout(() => { document.getElementById('overlay').style.display = 'none'; }, 500);
         running = true;
         initLBM();
         animate();
     }
 
-    // --- 5. MAIN LOOP ---
     function animate() {
         requestAnimationFrame(animate);
         if (!running) return;
 
-        // Perform physics steps per frame
-        // Doing multiple sub-steps increases simulation speed relative to render speed
-        stepLBM(); 
+        // 2 physics steps per render frame for fluid stability
+        stepLBM();
         stepLBM();
         
         updateVisuals();
         renderer.render(scene, camera);
     }
 
-    // Bind Button
     document.getElementById('startBtn').addEventListener('click', requestAccess);
 
-    // Resize handler
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
-
 </script>
 </body>
 </html>
