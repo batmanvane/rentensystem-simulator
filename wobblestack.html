@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Sticky Stack Top-Down</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Segoe UI', sans-serif; }
+        
+        /* HUD Layer */
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+        }
+
+        /* The "Pill" - Center of Mass Indicator */
+        #com-tracker {
+            position: absolute; top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            background: #00ff00; border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px #00ff00;
+            transition: background 0.2s;
+        }
+        
+        /* The Safe Zone Ring */
+        #safe-zone {
+            position: absolute; top: 50%; left: 50%;
+            width: 150px; height: 150px;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #score {
+            position: absolute; top: 20px; left: 0; width: 100%;
+            text-align: center; color: white; font-size: 24px; font-weight: 800;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        /* Start Overlay */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; pointer-events: auto; z-index: 20;
+            backdrop-filter: blur(5px);
+        }
+        h1 { color: #ff88bb; font-size: 32px; margin: 0; letter-spacing: -1px; }
+        p { color: #ccc; margin: 10px 0 30px 0; max-width: 80%; text-align: center; }
+        button {
+            background: #ff88bb; color: white; border: none; padding: 15px 50px;
+            font-size: 18px; border-radius: 30px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 5px 20px rgba(255, 0, 100, 0.4);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+
+<div id="hud">
+    <div id="score">0</div>
+    <div id="safe-zone"></div>
+    <div id="com-tracker"></div> </div>
+
+<div id="overlay">
+    <h1>JELLY STACK</h1>
+    <p>Top-Down View.<br>Keep the Green Dot inside the Ring.<br>Tap to Stick.</p>
+    <button id="startBtn">Start</button>
+</div>
+
+<script>
+    // --- CONFIGURATION ---
+    const COLORS = [0xFF0055, 0x00AAFF, 0xFFAA00, 0xCC00FF, 0x00FFAA];
+    const NX = 64, NY = 64; // LBM Grid size
+    const VISCOSITY = 0.04; // Honey-like
+    const OMEGA = 1.0 / (3.0 * VISCOSITY + 0.5);
+    
+    // Game Logic
+    let stack = []; // Stores {x, y, mass} of previous layers
+    let currentScore = 0;
+    let isRunning = false;
+    let gameOver = false;
+    
+    // Physics Inputs
+    let tiltX = 0, tiltY = 0; 
+    let targetTiltX = 0, targetTiltY = 0;
+
+    // --- LBM SIMULATION (The "Active" Layer) ---
+    // We simulate the current fluid layer here
+    const SIZE = NX*NY*9;
+    let f = new Float32Array(SIZE);
+    let f_new = new Float32Array(SIZE);
+    let rho = new Float32Array(NX*NY);
+    let ux = new Float32Array(NX*NY);
+    let uy = new Float32Array(NX*NY);
+    // D2Q9 constants
+    const w=[4/9,1/9,1/9,1/9,1/9,1/36,1/36,1/36,1/36], cx=[0,1,0,-1,0,1,-1,-1,1], cy=[0,0,1,0,-1,1,1,-1,-1], opp=[0,3,4,1,2,7,8,5,6];
+
+    function initLBM() {
+        // Start with a blob in the center
+        for(let i=0; i<NX*NY; i++) {
+            let x = i%NX, y = Math.floor(i/NX);
+            let dx = x - NX/2, dy = y - NY/2;
+            // Initial blob
+            let d = (dx*dx + dy*dy < 60) ? 1.5 : 1.0;
+            rho[i] = d;
+            ux[i]=0; uy[i]=0;
+            for(let k=0; k<9; k++) f[i*9+k] = w[k]*d;
+        }
+    }
+
+    function stepLBM() {
+        // Smooth tilt input
+        tiltX += (targetTiltX - tiltX) * 0.1;
+        tiltY += (targetTiltY - tiltY) * 0.1;
+
+        for(let y=0; y<NY; y++) {
+            for(let x=0; x<NX; x++) {
+                let idx = y*NX + x;
+                let sRho=0, sUx=0, sUy=0;
+                for(let i=0; i<9; i++) {
+                    let val = f[idx*9+i];
+                    sRho+=val; sUx+=val*cx[i]; sUy+=val*cy[i];
+                }
+                rho[idx]=sRho;
+                
+                // Add Centering Spring Force (Keep fluid in the "tray")
+                // This simulates surface tension keeping the blob together
+                let dx = x - NX/2; 
+                let dy = y - NY/2;
+                // The User's Tilt fights against this centering force
+                sUx += (tiltX * 0.08) * sRho; 
+                sUy += (-tiltY * 0.08) * sRho; // Y inverted for screen coords
+
+                let lu = sUx/sRho, lv = sUy/sRho;
+                ux[idx]=lu; uy[idx]=lv;
+
+                let u2 = lu*lu + lv*lv;
+                for(let i=0; i<9; i++) {
+                    let cu = cx[i]*lu + cy[i]*lv;
+                    let feq = w[i]*sRho*(1+3*cu+4.5*cu*cu-1.5*u2);
+                    let nVal = f[idx*9+i]*(1-OMEGA) + feq*OMEGA;
+                    let nx=x+cx[i], ny=y+cy[i];
+                    if(nx>=0&&nx<NX&&ny>=0&&ny<NY) f_new[(ny*NX+nx)*9+i] = nVal;
+                    else f_new[idx*9+opp[i]] = nVal;
+                }
+            }
+        }
+        let t=f; f=f_new; f_new=t;
+    }
+
+    // Get the center offset of the ACTIVE fluid layer (0 to 1 scale)
+    function getFluidOffset() {
+        let mass=0, mx=0, my=0;
+        for(let i=0; i<NX*NY; i++) {
+            if(rho[i]>1.1) {
+                mass+=rho[i];
+                mx += rho[i] * (i%NX);
+                my += rho[i] * Math.floor(i/NX);
+            }
+        }
+        if(mass===0) return {x:0, y:0};
+        // Convert to centered coordinates (-1 to 1)
+        return {
+            x: (mx/mass - NX/2) / (NX/2), 
+            y: (my/mass - NY/2) / (NY/2) 
+        };
+    }
+
+    // --- THREE.JS VISUALS ---
+    let scene, camera, renderer, activeMesh;
+    let stackGroup;
+    const LAYER_THICKNESS = 0.5;
+
+    function initThree() {
+        scene = new THREE.Scene();
+        // Top Down Camera
+        camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 40); 
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ alpha: false, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const amb = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(amb);
+        const spot = new THREE.SpotLight(0xffffff, 1.2);
+        spot.position.set(10, 10, 50);
+        spot.angle = 0.5;
+        spot.penumbra = 0.5;
+        spot.castShadow = true;
+        scene.add(spot);
+
+        // Background depth
+        const bgGeo = new THREE.PlaneGeometry(100, 100);
+        const bgMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        const bg = new THREE.Mesh(bgGeo, bgMat);
+        bg.position.z = -10;
+        scene.add(bg);
+
+        stackGroup = new THREE.Group();
+        scene.add(stackGroup);
+
+        // Active Fluid Mesh
+        // We use a plane that we deform based on density
+        const geo = new THREE.PlaneGeometry(10, 10, NX-1, NY-1);
+        const mat = new THREE.MeshPhysicalMaterial({
+            color: COLORS[0],
+            metalness: 0.1, roughness: 0.0,
+            transmission: 0.2, thickness: 1.0,
+            clearcoat: 1.0, transparent: true, opacity: 0.9
+        });
+        activeMesh = new THREE.Mesh(geo, mat);
+        activeMesh.position.z = 0; // Starts at base level
+        scene.add(activeMesh);
+    }
+
+    function updateActiveMesh() {
+        const pos = activeMesh.geometry.attributes.position.array;
+        for(let i=0; i<NX*NY; i++) {
+            // Deform Z (towards camera) based on density
+            let val = rho[i];
+            let h = (val > 1.05) ? (val-1.05)*3.0 : 0;
+            pos[i*3 + 2] = h; 
+        }
+        activeMesh.geometry.attributes.position.needsUpdate = true;
+        activeMesh.geometry.computeVertexNormals();
+    }
+
+    // --- GAMEPLAY LOGIC ---
+
+    function getGlobalCoM() {
+        // Calculates the weighted center of the entire stack + active fluid
+        let totalM = 0;
+        let totalX = 0;
+        let totalY = 0;
+
+        // 1. Frozen Stack
+        stack.forEach(layer => {
+            totalM += layer.mass;
+            totalX += layer.mass * layer.x;
+            totalY += layer.mass * layer.y;
+        });
+
+        // 2. Active Fluid (Relative to current stack height logic, but simply added here)
+        const fluid = getFluidOffset();
+        // Fluid coordinates are -1 to 1, map to World Units (Plane is 10 wide, so 5 units)
+        const activeX = fluid.x * 5;
+        const activeY = fluid.y * 5; // In ThreeJS, Y is Up/Down screen
+        const activeMass = 5; // Arbitrary mass for the active puddle
+
+        totalM += activeMass;
+        totalX += activeMass * activeX;
+        totalY += activeMass * activeY;
+
+        return { x: totalX/totalM, y: totalY/totalM };
+    }
+
+    function freezeLayer() {
+        if (gameOver) return;
+
+        const fluid = getFluidOffset();
+        const worldX = fluid.x * 5;
+        const worldY = fluid.y * 5;
+
+        // Visual Freeze
+        const frozenGeo = new THREE.CylinderGeometry(2, 2, LAYER_THICKNESS, 32);
+        // Flatten it to look like a splat
+        frozenGeo.scale(1.0 + Math.random()*0.2, 1.0, 1.0 + Math.random()*0.2);
+        
+        const mat = activeMesh.material.clone();
+        const mesh = new THREE.Mesh(frozenGeo, mat);
+        
+        // Rotate cylinder to face camera (flat disc)
+        mesh.rotation.x = Math.PI / 2; 
+        mesh.position.set(worldX, worldY, stack.length * LAYER_THICKNESS);
+        
+        stackGroup.add(mesh);
+        
+        stack.push({
+            x: worldX, 
+            y: worldY, 
+            mass: 5
+        });
+
+        // Move Camera Back
+        new TWEEN.Tween(camera.position)
+            .to({ z: camera.position.z + LAYER_THICKNESS }, 500)
+            .easing(TWEEN.Easing.Quadratic.Out)
+            .start();
+        
+        // Move Active Mesh Up
+        activeMesh.position.z += LAYER_THICKNESS;
+
+        // Check Failure
+        const com = getGlobalCoM();
+        const dist = Math.sqrt(com.x*com.x + com.y*com.y);
+        // Safe zone radius is roughly 2.0 world units (based on the visual ring)
+        if (dist > 2.2) { 
+            endGame();
+        } else {
+            nextLevel();
+        }
+    }
+
+    function nextLevel() {
+        currentScore++;
+        document.getElementById('score').innerText = currentScore;
+        
+        // Reset Fluid
+        initLBM();
+        // Next Color
+        activeMesh.material.color.setHex(COLORS[currentScore % COLORS.length]);
+
+        // THE CHALLENGE: 
+        // Rotate the camera slightly to disorient? 
+        // Or add a permanent offset to the physics?
+        // Let's add a random wobble to the container
+        new TWEEN.Tween(stackGroup.rotation)
+            .to({ z: Math.random() * 0.5 - 0.25 }, 1000)
+            .start();
+    }
+
+    function endGame() {
+        gameOver = true;
+        document.getElementById('com-tracker').style.background = "red";
+        document.getElementById('score').innerHTML += " - TOPPLED!";
+        document.getElementById('startBtn').innerText = "Retry";
+        document.getElementById('overlay').style.display = 'flex';
+        
+        // Collapse animation
+        new TWEEN.Tween(stackGroup.rotation)
+            .to({ x: 1, y: 1 }, 2000) // Spin out
+            .start();
+    }
+
+    function updateHUD() {
+        // Map World CoM to Screen Coordinates
+        const com = getGlobalCoM();
+        
+        // The Safe Zone is 150px wide on screen.
+        // In World Space, the "Base" is roughly radius 2.5.
+        // We need to map World(0,0) -> Screen(50%, 50%)
+        
+        // Simple map for the HUD dot (Visual Approximation)
+        // Range -3 to 3 world units maps to UI area
+        const scale = 25; // Sensitivity
+        const screenX = 50 + (com.x * scale);
+        const screenY = 50 - (com.y * scale); // Invert Y for screen
+        
+        const el = document.getElementById('com-tracker');
+        el.style.left = screenX + "%";
+        el.style.top = screenY + "%";
+
+        // Color warning
+        const dist = Math.sqrt(com.x*com.x + com.y*com.y);
+        if(dist > 1.5) el.style.background = "orange";
+        if(dist > 2.1) el.style.background = "red";
+        if(dist <= 1.5) el.style.background = "#00ff00";
+    }
+
+    // --- LOOP ---
+    function animate(time) {
+        requestAnimationFrame(animate);
+        TWEEN.update(time);
+        
+        if(!isRunning) return;
+
+        if(!gameOver) {
+            stepLBM();
+            stepLBM();
+            updateActiveMesh();
+            updateHUD();
+        }
+        
+        renderer.render(scene, camera);
+    }
+
+    // --- INPUTS ---
+    function handleOrient(e) {
+        if(gameOver) return;
+        // Portrait Mode: Gamma is Left/Right, Beta is Up/Down
+        let x = e.gamma || 0; 
+        let y = e.beta || 0;
+        
+        // Clamp 
+        if(x>20) x=20; if(x<-20) x=-20;
+        if(y>20) y=20; if(y<-20) y=-20;
+        
+        targetTiltX = x * 0.5;
+        targetTiltY = y * 0.5;
+    }
+
+    function handleMouse(e) {
+        if(gameOver) return;
+        const x = (e.clientX / window.innerWidth)*2-1;
+        const y = (e.clientY / window.innerHeight)*2-1;
+        targetTiltX = x * 20;
+        targetTiltY = y * 20;
+    }
+
+    function handleTap() {
+        if(isRunning && !gameOver) freezeLayer();
+    }
+
+    document.getElementById('startBtn').addEventListener('click', () => {
+        if(gameOver) location.reload();
+        
+        if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(resp => { if(resp==='granted') window.addEventListener('deviceorientation', handleOrient); })
+                .catch(console.error);
+        } else {
+            window.addEventListener('deviceorientation', handleOrient);
+        }
+        
+        window.addEventListener('mousemove', handleMouse);
+        window.addEventListener('touchstart', handleTap);
+        window.addEventListener('mousedown', handleTap);
+
+        document.getElementById('overlay').style.display = 'none';
+        isRunning = true;
+        initThree();
+        initLBM();
+        animate();
+    });
+
+    window.addEventListener('resize', ()=>{
+        camera.aspect = window.innerWidth/window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth,window.innerHeight);
+    });
+
+</script>
+</body>
+</html>
