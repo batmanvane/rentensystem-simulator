@@ -3,19 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-    <title>Stable 3D LBM</title>
+    <title>3D Blood Flow LBM</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #111; }
+        body { margin: 0; overflow: hidden; background-color: #050505; }
         #info {
-            position: absolute; top: 10px; width: 100%; text-align: center;
-            color: #aaa; font-family: sans-serif; pointer-events: none;
-            text-shadow: 1px 1px 2px black;
+            position: absolute; top: 20px; width: 100%; text-align: center;
+            color: #ff8888; font-family: 'Courier New', monospace; pointer-events: none;
+            text-shadow: 0px 0px 5px #500; font-weight: bold;
+        }
+        #beat {
+            position: absolute; bottom: 20px; left: 20px;
+            color: #f00; font-family: sans-serif; font-size: 24px;
+            text-shadow: 0 0 10px red;
         }
     </style>
 </head>
 <body>
-    <div id="info">3D LBM &bull; Stabilized<br>Touch & Drag to Rotate</div>
-    
+    <div id="info">HEMODYNAMIC SIMULATION (D3Q15)<br>Volume Raycasting &bull; Pulsatile Flow</div>
+    <div id="beat">❤</div>
+
     <script type="importmap">
         {
             "imports": {
@@ -29,293 +35,375 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- CONFIG ---
-        const SIZE = 32;
+        // --- CONFIGURATION ---
+        const SIZE = 32;            
         const ATLAS_COLS = 8;
         const ATLAS_ROWS = 4;
-        const RES_X = SIZE * ATLAS_COLS;
-        const RES_Y = SIZE * ATLAS_ROWS;
+        const RES_X = 256;
+        const RES_Y = 128;
+        const STEPS_PER_FRAME = 2; 
 
-        // --- SHADER COMMON ---
-        const shaderCommon = `
+        // --- SHARED SHADER UTILS ---
+        const commonHead = `
             precision highp float;
             precision highp sampler2D;
             #define SIZE 32.0
             #define ATLAS_COLS 8.0
+            #define ATLAS_ROWS 4.0
             #define RES_X 256.0
             #define RES_Y 128.0
 
+            // Map 3D (0..1) -> Atlas UV
             vec2 uv3Dto2D(vec3 uvw) {
                 vec3 voxel = floor(uvw * SIZE);
                 voxel = clamp(voxel, vec3(0.0), vec3(SIZE - 1.0));
-                float zIndex = voxel.z;
-                float col = mod(zIndex, ATLAS_COLS);
-                float row = floor(zIndex / ATLAS_COLS);
-                vec2 sliceOffset = vec2(col * SIZE, row * SIZE);
-                vec2 pixelPos = sliceOffset + voxel.xy + 0.5;
-                return pixelPos / vec2(RES_X, RES_Y);
+                float idx = voxel.z;
+                float col = mod(idx, ATLAS_COLS);
+                float row = floor(idx / ATLAS_COLS);
+                vec2 offset = vec2(col * SIZE, row * SIZE);
+                return (offset + voxel.xy + 0.5) / vec2(RES_X, RES_Y);
             }
         `;
 
-        // --- CONSTANTS (Weights) ---
-        // Center: 2/9, Face: 1/9, Corner: 1/72
-        const glslWeights = `
-            const float w0 = 0.2222222; // 2/9
-            const float w1 = 0.1111111; // 1/9
-            const float w2 = 0.0138888; // 1/72
-            // 0, 1-6, 7-14
-        `;
-
-        // --- INIT SHADER (Sets perfect equilibrium) ---
-        const initFrag = `
-            ${shaderCommon}
-            ${glslWeights}
-            layout(location = 0) out vec4 out0;
-            layout(location = 1) out vec4 out1;
-            layout(location = 2) out vec4 out2;
-            layout(location = 3) out vec4 out3;
-
-            void main() {
-                // Initialize with Density = 1.0, Velocity = 0.0
-                // f_i = w_i * rho
-                out0 = vec4(w0, w1, w1, w1);      // 0, 1, 2, 3
-                out1 = vec4(w1, w1, w1, w2);      // 4, 5, 6, 7
-                out2 = vec4(w2, w2, w2, w2);      // 8, 9, 10, 11
-                out3 = vec4(w2, w2, w2, 1.0);     // 12, 13, 14, unused
-            }
-        `;
-
-        // --- SIMULATION SHADER ---
-        const simFrag = `
-            ${shaderCommon}
-            ${glslWeights}
-            
-            uniform sampler2D t0, t1, t2, t3;
-            uniform vec3 mouseVel;
-            uniform float time;
-
-            layout(location = 0) out vec4 out0;
-            layout(location = 1) out vec4 out1;
-            layout(location = 2) out vec4 out2;
-            layout(location = 3) out vec4 out3;
-
+        // --- LBM CONSTANTS ---
+        const lbmConsts = `
+            const float w0 = 0.2222222;
+            const float w1 = 0.1111111;
+            const float w2 = 0.0138888;
+            // D3Q15 Lattice vectors
             const vec3 e[15] = vec3[](
                 vec3(0,0,0),
                 vec3(1,0,0), vec3(-1,0,0), vec3(0,1,0), vec3(0,-1,0), vec3(0,0,1), vec3(0,0,-1),
                 vec3(1,1,1), vec3(-1,1,1), vec3(1,-1,1), vec3(-1,-1,1),
                 vec3(1,1,-1), vec3(-1,1,-1), vec3(1,-1,-1), vec3(-1,-1,-1)
             );
+            const float weights[15] = float[](w0,w1,w1,w1,w1,w1,w1,w2,w2,w2,w2,w2,w2,w2,w2);
+        `;
 
-            const float weights[15] = float[](
-                w0, w1, w1, w1, w1, w1, w1,
-                w2, w2, w2, w2, w2, w2, w2, w2
-            );
+        // --- INITIALIZATION SHADER ---
+        const initFrag = `
+            ${commonHead}
+            ${lbmConsts}
+            layout(location=0) out vec4 o0; layout(location=1) out vec4 o1;
+            layout(location=2) out vec4 o2; layout(location=3) out vec4 o3;
 
             void main() {
+                // Init at Equilibrium (rho=1, u=0)
+                o0 = vec4(w0, w1, w1, w1);
+                o1 = vec4(w1, w1, w1, w2);
+                o2 = vec4(w2, w2, w2, w2);
+                o3 = vec4(w2, w2, w2, 1.0);
+            }
+        `;
+
+        // --- SIMULATION SHADER (PHYSICS) ---
+        const simFrag = `
+            ${commonHead}
+            ${lbmConsts}
+            uniform sampler2D t0, t1, t2, t3;
+            uniform float time;
+            
+            layout(location=0) out vec4 o0; layout(location=1) out vec4 o1;
+            layout(location=2) out vec4 o2; layout(location=3) out vec4 o3;
+
+            void main() {
+                // 1. Get Coordinates
                 vec2 uv = gl_FragCoord.xy / vec2(RES_X, RES_Y);
-                
-                // Reconstruct 3D pos
                 float col = floor(gl_FragCoord.x / SIZE);
                 float row = floor(gl_FragCoord.y / SIZE);
                 float z = row * ATLAS_COLS + col;
-                float x = mod(gl_FragCoord.x, SIZE);
-                float y = mod(gl_FragCoord.y, SIZE);
-                vec3 currentPos = vec3(x, y, z) / SIZE;
+                vec3 pos = vec3(mod(gl_FragCoord.x, SIZE), mod(gl_FragCoord.y, SIZE), z);
+                vec3 normPos = pos / SIZE;
 
-                // Stream
+                // 2. Define Vessel Geometry (Cylinder along X-axis)
+                // Center is (0.5, 0.5) in YZ plane
+                vec2 yz = normPos.yz - 0.5;
+                float dist = length(yz);
+                bool isWall = dist > 0.45; // Radius 0.45
+
+                // 3. Stream
                 float f[15];
+                
                 for(int i=0; i<15; i++) {
-                    vec3 neighborPos = currentPos - (e[i] / SIZE);
-                    vec2 sampleUV = uv3Dto2D(neighborPos);
-                    vec4 s0 = texture(t0, sampleUV);
-                    vec4 s1 = texture(t1, sampleUV);
-                    vec4 s2 = texture(t2, sampleUV);
-                    vec4 s3 = texture(t3, sampleUV);
+                    // Basic Streaming
+                    vec3 neighborPos = normPos - (e[i] / SIZE);
                     
+                    // Periodic Boundary on X (Flow Direction)
+                    if(neighborPos.x < 0.0) neighborPos.x += 1.0;
+                    if(neighborPos.x > 1.0) neighborPos.x -= 1.0;
+
+                    // Read Neighbor
+                    vec2 nUV = uv3Dto2D(neighborPos);
+                    vec4 s0 = texture(t0, nUV);
+                    vec4 s1 = texture(t1, nUV);
+                    vec4 s2 = texture(t2, nUV);
+                    vec4 s3 = texture(t3, nUV);
+
+                    // Unpack
                     if(i==0) f[0]=s0.r; else if(i==1) f[1]=s0.g; else if(i==2) f[2]=s0.b; else if(i==3) f[3]=s0.a;
                     else if(i==4) f[4]=s1.r; else if(i==5) f[5]=s1.g; else if(i==6) f[6]=s1.b; else if(i==7) f[7]=s1.a;
                     else if(i==8) f[8]=s2.r; else if(i==9) f[9]=s2.g; else if(i==10) f[10]=s2.b; else if(i==11) f[11]=s2.a;
                     else if(i==12) f[12]=s3.r; else if(i==13) f[13]=s3.g; else if(i==14) f[14]=s3.b;
                 }
 
-                // Moments
+                // 4. Bounce-Back (Wall Boundary)
+                // If this cell is a wall, we reflect the populations
+                if (isWall) {
+                     // Simple bounce: f_i(x, t+1) = f_-i(x, t)
+                     // Ideally we do this during streaming, but for a simple demo:
+                     // We force u=0, rho=1, and reset to equilibrium.
+                     // This acts as a "sticky" wall.
+                     float rho = 1.0;
+                     vec3 u = vec3(0.0);
+                     // Set to equilibrium for wall (prevents leaks)
+                     o0 = vec4(w0, w1, w1, w1);
+                     o1 = vec4(w1, w1, w1, w2);
+                     o2 = vec4(w2, w2, w2, w2);
+                     o3 = vec4(w2, w2, w2, 1.0);
+                     return;
+                }
+
+                // 5. Macroscopic
                 float rho = 0.0;
                 vec3 u = vec3(0.0);
-                for(int i=0; i<15; i++) {
-                    rho += f[i];
-                    u += e[i] * f[i];
-                }
-                
-                // Hard Safety Clamp: Prevent division by zero or negative mass
-                if(rho < 0.1) rho = 1.0; 
-                
+                for(int i=0; i<15; i++) { rho += f[i]; u += e[i] * f[i]; }
+                if(rho < 0.001) rho = 1.0; // Safety
                 u /= rho;
 
-                // Input Injection (Gentle)
-                float d = distance(currentPos, vec3(0.5));
-                if(d < 0.15) {
-                    u += mouseVel * 0.05; // Very weak injection
-                }
+                // 6. Apply Heartbeat Force
+                // Pumping along X axis
+                // Systole (contraction) - sharp push, Diastole (relaxation) - pause
+                float pulse = sin(time * 5.0); // ~50 BPM
+                float force = smoothstep(0.0, 1.0, pulse); 
+                // Only add force if inside vessel
+                u.x += force * 0.015; 
 
-                // Safety Clamp Velocity (The "Anti-Explosion" lock)
-                if(length(u) > 0.1) u = normalize(u) * 0.1;
+                // Velocity Clamp
+                if(length(u) > 0.15) u = normalize(u) * 0.15;
 
-                // Collision (BGK)
-                // Omega = 1.0 is very stable (Viscous). 
-                float omega = 1.0; 
+                // 7. Collision (BGK)
+                float omega = 1.1; // Viscosity
                 float uSqu = dot(u, u);
-                
                 for(int i=0; i<15; i++) {
                     float eu = dot(e[i], u);
                     float feq = weights[i] * rho * (1.0 + 3.0*eu + 4.5*eu*eu - 1.5*uSqu);
                     f[i] = mix(f[i], feq, omega);
                 }
 
-                out0 = vec4(f[0], f[1], f[2], f[3]);
-                out1 = vec4(f[4], f[5], f[6], f[7]);
-                out2 = vec4(f[8], f[9], f[10], f[11]);
-                out3 = vec4(f[12], f[13], f[14], 1.0);
+                o0 = vec4(f[0], f[1], f[2], f[3]);
+                o1 = vec4(f[4], f[5], f[6], f[7]);
+                o2 = vec4(f[8], f[9], f[10], f[11]);
+                o3 = vec4(f[12], f[13], f[14], 1.0);
             }
         `;
 
-        // --- VISUALIZATION SHADER ---
-        const sliceFrag = `
-            ${shaderCommon}
-            varying vec3 vPos;
+        // --- VOLUME RENDER SHADER (Raymarching) ---
+        const volFrag = `
+            ${commonHead}
+            in vec3 vOrigin;
+            in vec3 vDirection;
             uniform sampler2D t0, t1, t2, t3;
+            uniform float time;
+
+            // Box Intersection
+            vec2 hitBox(vec3 orig, vec3 dir) {
+                vec3 boxMin = vec3(0.0);
+                vec3 boxMax = vec3(1.0);
+                vec3 invDir = 1.0 / dir;
+                vec3 tmin = (boxMin - orig) * invDir;
+                vec3 tmax = (boxMax - orig) * invDir;
+                vec3 t1 = min(tmin, tmax);
+                vec3 t2 = max(tmin, tmax);
+                float tNear = max(max(t1.x, t1.y), t1.z);
+                float tFar = min(min(t2.x, t2.y), t2.z);
+                return vec2(tNear, tFar);
+            }
 
             void main() {
-                vec2 uv = uv3Dto2D(vPos);
-                vec4 s0 = texture(t0, uv);
-                vec4 s1 = texture(t1, uv);
-                vec4 s2 = texture(t2, uv);
-                vec4 s3 = texture(t3, uv);
+                vec3 rayDir = normalize(vDirection);
+                vec2 bounds = hitBox(vOrigin, rayDir);
                 
-                // Calculate Macroscopic Velocity Magnitude for color
-                // (Showing speed is more interesting than density for incompressible fluid)
-                // We just approximate velocity direction roughly
-                // Or just show Density (rho)
-                
-                float rho = dot(s0, vec4(1.0)) + dot(s1, vec4(1.0)) + dot(s2, vec4(1.0)) + dot(s3.rgb, vec3(1.0));
-                
-                // Enhance contrast of small ripples
-                float val = (rho - 1.0) * 15.0; // High contrast
-                
-                vec3 col = vec3(0.0, 0.0, 0.2);
-                if(val > 0.0) col = mix(col, vec3(0.0, 1.0, 1.0), val);
-                if(val < 0.0) col = mix(col, vec3(1.0, 0.0, 0.2), -val);
+                if (bounds.x > bounds.y) discard;
+                bounds.x = max(bounds.x, 0.0);
 
-                float alpha = smoothstep(0.01, 0.2, abs(val)) * 0.8 + 0.1;
-                gl_FragColor = vec4(col, alpha);
+                vec3 p = vOrigin + bounds.x * rayDir;
+                vec3 step = rayDir * 0.015; // Step size (1/64 approx)
+
+                vec4 colorSum = vec4(0.0);
+                
+                // March
+                for(int i=0; i<64; i++) {
+                    if(p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0 || p.z < 0.0 || p.z > 1.0) break;
+                    
+                    // Read Density/Velocity roughly
+                    vec2 uv = uv3Dto2D(p);
+                    vec4 s0 = texture(t0, uv); 
+                    // We use 'rho' as opacity base
+                    float rho = s0.r + s0.g + s0.b + s0.a; 
+
+                    // Mask cylinder in visualization
+                    vec2 yz = p.yz - 0.5;
+                    float dist = length(yz);
+                    
+                    if(dist < 0.45) {
+                        // Inside Vessel
+                        // Visualize velocity variance (turbulence/flow)
+                        // We approximate velocity by deviation from equilibrium w0
+                        float activity = abs(rho - 1.0) * 20.0;
+                        
+                        // BLOOD COLOR PALETTE
+                        // Deep Red center, brighter red on flow
+                        vec3 bloodColor = vec3(0.6, 0.0, 0.1);
+                        bloodColor += vec3(0.4, 0.0, 0.0) * activity; 
+                        
+                        // Add "Cells" look using coordinate noise (fake)
+                        float cellNoise = sin(p.x*40.0 + time*5.0) * sin(p.y*40.0) * sin(p.z*40.0);
+                        bloodColor += vec3(0.1) * cellNoise;
+
+                        float alpha = 0.08; // Semi-transparent
+                        
+                        // Accumulate
+                        colorSum.rgb += (1.0 - colorSum.a) * alpha * bloodColor;
+                        colorSum.a += (1.0 - colorSum.a) * alpha;
+                    } else if (dist < 0.48) {
+                        // Vessel Wall (Membrane)
+                        vec3 membraneCol = vec3(0.8, 0.4, 0.4);
+                        float alpha = 0.2;
+                        colorSum.rgb += (1.0 - colorSum.a) * alpha * membraneCol;
+                        colorSum.a += (1.0 - colorSum.a) * alpha;
+                    }
+
+                    if(colorSum.a > 0.95) break;
+                    p += step;
+                }
+
+                gl_FragColor = colorSum;
             }
         `;
 
-        const sliceVert = `
-            varying vec3 vPos;
+        const volVert = `
+            out vec3 vOrigin;
+            out vec3 vDirection;
             void main() {
-                vPos = position + 0.5; 
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                // Transform vertex to world space
+                vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                vOrigin = cameraPosition; // Ray origin
+                vDirection = worldPos.xyz - cameraPosition; // Ray direction
+                gl_Position = projectionMatrix * viewMatrix * worldPos;
             }
         `;
 
-        // --- SETUP ---
-        const renderer = new THREE.WebGLRenderer({ antialias: false });
+        // --- MAIN SETUP ---
+        const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(1); // Performance
+        renderer.setClearColor(0x000000, 1);
         document.body.appendChild(renderer.domElement);
 
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
-        camera.position.set(1.8, 1.8, 2.2);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 10);
+        camera.position.set(1.5, 1.0, 1.5);
         
-        new OrbitControls(camera, renderer.domElement);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0.5, 0.5, 0.5);
 
-        // Targets
-        const createTarget = () => new THREE.WebGLMultipleRenderTargets(
-            RES_X, RES_Y, 4, 
-            { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, type: THREE.FloatType }
-        );
-        let simA = createTarget();
-        let simB = createTarget();
+        // Simulation Targets
+        const rtOpts = { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter };
+        const createBundle = () => new THREE.WebGLMultipleRenderTargets(RES_X, RES_Y, 4, rtOpts);
+        let simA = createBundle();
+        let simB = createBundle();
 
-        // 1. INIT MESH
+        // 1. INIT
         const initMat = new THREE.ShaderMaterial({
             vertexShader: `void main() { gl_Position = vec4( position, 1.0 ); }`,
-            fragmentShader: initFrag,
-            glslVersion: THREE.GLSL3
+            fragmentShader: initFrag, glslVersion: THREE.GLSL3
         });
         const fsQuad = new THREE.Mesh(new THREE.PlaneGeometry(2,2), initMat);
-        const simScene = new THREE.Scene();
-        simScene.add(fsQuad);
+        const simScene = new THREE.Scene(); simScene.add(fsQuad);
+        renderer.setRenderTarget(simA); renderer.render(simScene, new THREE.Camera());
+        renderer.setRenderTarget(simB); renderer.render(simScene, new THREE.Camera());
 
-        // Run Init
-        renderer.setRenderTarget(simA);
-        renderer.render(simScene, new THREE.Camera());
-        renderer.setRenderTarget(simB); // Clear B too
-        renderer.render(simScene, new THREE.Camera());
-
-        // 2. SIM MESH
+        // 2. PHYSICS
         const simMat = new THREE.ShaderMaterial({
             uniforms: {
                 t0: { value: null }, t1: { value: null }, t2: { value: null }, t3: { value: null },
-                mouseVel: { value: new THREE.Vector3(0,0,0) },
                 time: { value: 0 }
             },
             vertexShader: `void main() { gl_Position = vec4( position, 1.0 ); }`,
-            fragmentShader: simFrag,
-            glslVersion: THREE.GLSL3
+            fragmentShader: simFrag, glslVersion: THREE.GLSL3
         });
-        fsQuad.material = simMat; // Swap material
+        fsQuad.material = simMat;
 
-        // 3. VIS MESH
-        const visMat = new THREE.ShaderMaterial({
-            uniforms: { t0: { value: null }, t1: { value: null }, t2: { value: null }, t3: { value: null } },
-            vertexShader: sliceVert, fragmentShader: sliceFrag,
-            side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+        // 3. VISUALIZATION (Raymarching Box)
+        const volMat = new THREE.ShaderMaterial({
+            uniforms: {
+                t0: { value: null }, t1: { value: null }, t2: { value: null }, t3: { value: null },
+                time: { value: 0 }
+            },
+            vertexShader: volVert,
+            fragmentShader: volFrag,
+            transparent: true,
+            side: THREE.BackSide // Render back faces to get full volume rays
         });
-        const pg = new THREE.PlaneGeometry(1,1);
-        const group = new THREE.Group();
-        group.add(new THREE.Mesh(pg, visMat));
-        const p2 = new THREE.Mesh(pg, visMat); p2.rotation.x = Math.PI/2; group.add(p2);
-        const p3 = new THREE.Mesh(pg, visMat); p3.rotation.y = Math.PI/2; group.add(p3);
-        scene.add(group);
-        scene.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)), new THREE.LineBasicMaterial({color:0x333333})));
+        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+        // Shift box so it sits from 0,0,0 to 1,1,1
+        boxGeo.translate(0.5, 0.5, 0.5); 
+        const volumeMesh = new THREE.Mesh(boxGeo, volMat);
+        scene.add(volumeMesh);
 
-        // --- LOOP ---
+        // Add wireframe for reference
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({color: 0x330000, transparent:true, opacity:0.3}));
+        scene.add(edges);
+
+        // --- ANIMATION LOOP ---
         const clock = new THREE.Clock();
-        
+        const beatDiv = document.getElementById('beat');
+
         function animate() {
             requestAnimationFrame(animate);
+            
             const t = clock.getElapsedTime();
+            const dt = clock.getDelta();
 
-            // Gentle Oscillation
-            simMat.uniforms.mouseVel.value.set(Math.sin(t*2), Math.cos(t*1.5), 0);
+            // Update Heartbeat UI
+            const pulse = Math.sin(t * 5.0);
+            if(pulse > 0.8) beatDiv.style.transform = "scale(1.5)";
+            else beatDiv.style.transform = "scale(1.0)";
+            beatDiv.style.opacity = pulse > 0.0 ? 1.0 : 0.5;
 
-            // Ping-Pong
+            // --- PHYSICS STEP ---
             let source = simA, dest = simB;
-            // We do 2 steps per frame for speed
-            for(let i=0; i<2; i++) {
+            simMat.uniforms.time.value = t;
+            
+            for(let i=0; i<STEPS_PER_FRAME; i++) {
                 simMat.uniforms.t0.value = source.texture[0];
                 simMat.uniforms.t1.value = source.texture[1];
                 simMat.uniforms.t2.value = source.texture[2];
                 simMat.uniforms.t3.value = source.texture[3];
-                
+
                 renderer.setRenderTarget(dest);
                 renderer.render(simScene, new THREE.Camera());
-                
-                // Swap
+
                 let temp = source; source = dest; dest = temp;
             }
             simA = source; simB = dest;
 
-            // Render
+            // --- RENDER STEP ---
             renderer.setRenderTarget(null);
-            visMat.uniforms.t0.value = simA.texture[0];
-            visMat.uniforms.t1.value = simA.texture[1];
-            visMat.uniforms.t2.value = simA.texture[2];
-            visMat.uniforms.t3.value = simA.texture[3];
+            volMat.uniforms.t0.value = simA.texture[0];
+            volMat.uniforms.time.value = t;
+            
+            controls.update();
             renderer.render(scene, camera);
         }
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
         animate();
     </script>
 </body>
