@@ -108,13 +108,13 @@
 <script>
     // --- PHYSICS CONFIG ---
     const ADD_INTERVAL = 240; // 4 seconds per layer at 60fps
-    const VISCOSITY = 0.08;   // Sticky batter
+    const VISCOSITY = 0.16;   // Sticky batter
     
     // Non-Linear Difficulty Variables
     // Instability = TILT * (BASE + HEIGHT^2 * SCALE)
     const BASE_INSTABILITY = 0.0;  // Start perfectly stable
     const HEIGHT_SCALING = 0.0002; // Very slow ramp up
-    const CONTROL_POWER = 0.008;   // How strong your phone tilt is
+    const CONTROL_POWER = 0.002;   // How strong your phone tilt is
 
     // --- LBM VARS ---
     const NX=64, NY=64, Q=9;
