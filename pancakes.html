@@ -3,186 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Sticky Balanced Stack</title>
+    <title>Rocket Stack Challenge</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Segoe UI', sans-serif; }
-
-        /* UI OVERLAY */
+        body { margin: 0; overflow: hidden; background: #0b0b15; font-family: 'Courier New', monospace; }
+        
+        /* HUD */
         #hud {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; display: flex; flex-direction: column;
-            justify-content: space-between; padding: 30px; box-sizing: border-box;
+            pointer-events: none; z-index: 10;
         }
 
-        /* The Stability Meter */
-        #meter-container {
-            width: 300px; height: 8px; background: rgba(255,255,255,0.2);
-            border-radius: 4px; align-self: center; position: relative;
-            overflow: hidden; margin-top: 50px;
-        }
-        #meter-fill {
-            position: absolute; top: 0; left: 50%; width: 0%; height: 100%;
-            background: #00ff00; transition: background 0.2s;
+        /* The Crosshair (Your view center) */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
         }
         
-        #stats {
-            text-align: center; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        /* The "Safe Zone" Ring */
+        #safe-ring {
+            position: absolute; top: 50%; left: 50%;
+            width: 120px; height: 120px; /* If the green dot leaves this, you die */
+            border: 2px dashed rgba(0, 255, 0, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: border-color 0.2s;
         }
-        h2 { margin: 0; font-size: 40px; color: #ffcc00; }
-        p { margin: 5px 0 0 0; color: #aaa; font-size: 14px; }
 
-        /* Timer Ring */
-        #timer-ring {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 200px; height: 200px; border-radius: 50%;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            pointer-events: none;
+        /* The CoM Indicator (The Bubble Level) */
+        #bubble-level {
+            position: absolute; top: 50%; left: 50%;
+            width: 16px; height: 16px;
+            background: #00ff00; border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 8px #00ff00;
+            transition: background 0.2s;
         }
-        /* The visual "fill" for the timer */
-        #timer-progress {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-90deg);
-            width: 200px; height: 200px;
+
+        #altitude-meter {
+            position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+            height: 300px; width: 6px; background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        #altitude-fill {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 0%;
+            background: linear-gradient(to top, #ffaa00, #ff0055);
+            transition: height 0.5s;
+        }
+        #score-text {
+            position: absolute; right: 35px; top: 50%; transform: translateY(-50%);
+            color: white; font-size: 24px; font-weight: bold;
+        }
+
+        /* Timer Circle */
+        #timer-svg {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            width: 60px; height: 60px;
         }
         circle {
-            fill: none; stroke: #ffcc00; stroke-width: 4; stroke-dasharray: 628; stroke-dashoffset: 628;
+            fill: none; stroke: #ffaa00; stroke-width: 5; 
+            stroke-dasharray: 157; stroke-dashoffset: 0;
             transition: stroke-dashoffset 0.1s linear;
         }
 
-        /* Start Screen */
         #overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 20;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            pointer-events: auto;
+            background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; pointer-events: auto; z-index: 20;
         }
         button {
-            background: #ffcc00; color: black; border: none; padding: 20px 60px;
-            font-size: 20px; font-weight: bold; border-radius: 50px; cursor: pointer;
-            box-shadow: 0 0 30px rgba(255, 200, 0, 0.4);
+            background: #00ffaa; color: #003322; border: none; padding: 18px 50px;
+            font-size: 18px; font-weight: 900; letter-spacing: 2px; cursor: pointer;
+            text-transform: uppercase; border-radius: 4px;
+            box-shadow: 0 0 20px rgba(0, 255, 170, 0.4);
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
 </head>
 <body>
 
 <div id="hud">
-    <div id="meter-container">
-        <div id="meter-fill"></div>
-    </div>
-    
-    <div id="timer-ring">
-        <svg id="timer-progress">
-            <circle cx="100" cy="100" r="98"></circle>
+    <div id="safe-ring"></div>
+    <div id="crosshair"></div> <div id="bubble-level"></div> <div id="timer-svg">
+        <svg width="60" height="60" viewBox="0 0 60 60">
+            <circle cx="30" cy="30" r="25" transform="rotate(-90 30 30)"></circle>
         </svg>
     </div>
 
-    <div id="stats">
-        <h2 id="score">0</h2>
-        <p>PANCAKES STACKED</p>
+    <div id="altitude-meter">
+        <div id="altitude-fill"></div>
     </div>
+    <div id="score-text">0m</div>
 </div>
 
 <div id="overlay">
-    <h1 style="color:white; margin-bottom:10px;">AUTO-STACKER</h1>
-    <p style="color:#aaa; margin-bottom:40px;">Keep the tower balanced. Don't let it fall.</p>
-    <button id="startBtn">START BALANCING</button>
+    <h1 style="color:white; letter-spacing: 4px;">ROCKET STACK</h1>
+    <p style="color:#888; margin-bottom: 30px;">Hold Flat. Keep the Bubble Centered.<br>Automatic Pouring.</p>
+    <button id="startBtn">IGNITION</button>
 </div>
 
 <script>
     // --- PHYSICS CONFIG ---
-    const ADD_INTERVAL = 300; // Frames between new pancakes (~5 seconds)
-    const VISCOSITY = 0.12;   // Very high = Sticky/Gooey
-    const GRAVITY_FACTOR = 0.003; // How fast the tower falls when tilted
-    const CONTROL_POWER = 0.005;  // How much your phone corrects the tilt
+    const ADD_INTERVAL = 240; // 4 seconds per layer at 60fps
+    const VISCOSITY = 0.08;   // Sticky batter
+    
+    // Non-Linear Difficulty Variables
+    // Instability = TILT * (BASE + HEIGHT^2 * SCALE)
+    const BASE_INSTABILITY = 0.0;  // Start perfectly stable
+    const HEIGHT_SCALING = 0.0002; // Very slow ramp up
+    const CONTROL_POWER = 0.008;   // How strong your phone tilt is
 
-    // --- LBM (Fluid) VARS ---
+    // --- LBM VARS ---
     const NX=64, NY=64, Q=9;
-    const SIZE = NX*NY*Q;
-    let f=new Float32Array(SIZE), f_new=new Float32Array(SIZE);
-    let rho=new Float32Array(NX*NY), ux=new Float32Array(NX*NY), uy=new Float32Array(NX*NY);
+    let f = new Float32Array(NX*NY*Q), f_new = new Float32Array(NX*NY*Q);
+    let rho = new Float32Array(NX*NY);
     const w=[4/9,1/9,1/9,1/9,1/9,1/36,1/36,1/36,1/36], cx=[0,1,0,-1,0,1,-1,-1,1], cy=[0,0,1,0,-1,1,1,-1,-1], opp=[0,3,4,1,2,7,8,5,6];
 
     // --- GAME STATE ---
-    let stack = []; // Array of { mesh, xOffset, yOffset, mass }
+    let stack = []; 
     let frameCount = 0;
     let isRunning = false;
     let isGameOver = false;
     
-    // Inverted Pendulum State
-    let towerAngleX = 0; // Current tilt of the tower (radians)
-    let towerAngleY = 0; 
-    let towerVelocityX = 0; // How fast it's falling
-    let towerVelocityY = 0;
+    // Pendulum Physics State
+    // We represent tilt as X/Y offset of the "Ground" relative to the "Top"
+    let tiltX = 0; 
+    let tiltY = 0; 
+    let velX = 0;
+    let velY = 0;
     
     // User Input
-    let inputTiltX = 0, inputTiltY = 0;
-    
+    let inputX = 0, inputY = 0;
+
     // --- THREE.JS ---
     let scene, camera, renderer;
-    let plateGroup; // The entire world that tilts
-    let fluidMesh;  // The active wet pancake
-    let stackGroup; // The rigid frozen pancakes
+    let groundGroup, stackGroup, activeMesh;
 
     // ==========================================
-    // 1. LBM SIMULATION (The "Wet" Layer)
+    // 1. LBM (Active Layer)
     // ==========================================
     function initLBM() {
-        const OMEGA = 1.0 / (3.0 * VISCOSITY + 0.5);
-        
-        // Randomize the pour location slightly (creates the imbalance!)
-        const offsetX = (Math.random() - 0.5) * 8;
-        const offsetY = (Math.random() - 0.5) * 8;
-        
-        for(let y=0; y<NY; y++) {
-            for(let x=0; x<NX; x++) {
-                const i = y*NX + x;
-                const dx = (x - NX/2) - offsetX;
-                const dy = (y - NY/2) - offsetY;
-                // Irregular blob shape
-                const noise = Math.sin(x*0.3)*Math.cos(y*0.3)*2;
-                const r = 10 + (Math.random()*2);
-                
-                let d = 1.0;
-                if((dx*dx + dy*dy) < (r+noise)**2) d = 2.0; // Thick batter
-                
-                rho[i] = d;
-                ux[i]=0; uy[i]=0;
-                for(let k=0; k<Q; k++) f[i*Q+k] = w[k]*d;
-            }
+        const omega = 1.0 / (3.0 * VISCOSITY + 0.5);
+        // Start in center
+        for(let i=0; i<NX*NY; i++) {
+            let x=i%NX, y=Math.floor(i/NX);
+            let dx=x-NX/2, dy=y-NY/2;
+            let d = 1.0;
+            // Random blob shape
+            if(dx*dx + dy*dy < 80 + Math.random()*20) d = 2.0;
+            rho[i]=d;
+            for(let k=0; k<Q; k++) f[i*Q+k]=w[k]*d;
         }
-        return OMEGA;
+        return omega;
     }
 
     function stepLBM(omega) {
-        // The active fluid is affected by the TOWER'S tilt
-        // If tower leans left, fluid slides left
-        const gX = towerAngleY * 0.1; 
-        const gY = -towerAngleX * 0.1;
+        // Fluid slides based on TILT + INPUT
+        // If the tower leans right (tiltX > 0), fluid slides right relative to the plate
+        const forceX = tiltX * 0.05 + inputX * 0.02; 
+        const forceY = tiltY * 0.05 + inputY * 0.02;
 
         for(let y=0; y<NY; y++) {
             for(let x=0; x<NX; x++) {
-                const i = y*NX + x;
+                let i=y*NX+x;
                 let sRho=0, sUx=0, sUy=0;
                 for(let k=0; k<Q; k++) {
-                    let val = f[i*Q+k];
-                    sRho+=val; sUx+=val*cx[k]; sUy+=val*cy[k];
+                    let v=f[i*Q+k]; sRho+=v; sUx+=v*cx[k]; sUy+=v*cy[k];
                 }
                 rho[i]=sRho;
                 
-                // Add forces: Gravity from Tilt + Surface Tension
-                sUx += (gX - (x-NX/2)*0.002) * sRho;
-                sUy += (gY - (y-NY/2)*0.002) * sRho;
-
-                let u = sUx/sRho, v = sUy/sRho;
-                const u2 = u*u + v*v;
+                // Add Forces (Slide + Surface Tension)
+                sUx += (forceX - (x-NX/2)*0.001)*sRho;
+                sUy += (forceY - (y-NY/2)*0.001)*sRho;
                 
+                let u=sUx/sRho, v=sUy/sRho;
+                let u2=u*u+v*v;
                 for(let k=0; k<Q; k++) {
-                    const cu = cx[k]*u + cy[k]*v;
-                    const feq = w[k]*sRho*(1+3*cu+4.5*cu*cu-1.5*u2);
-                    const nVal = f[i*Q+k]*(1-omega) + feq*omega;
-                    const nx=x+cx[k], ny=y+cy[k];
-                    if(nx>=0&&nx<NX&&ny>=0&&ny<NY) f_new[(ny*NX+nx)*Q+k] = nVal;
-                    else f_new[i*Q+opp[k]] = nVal;
+                    let cu=cx[k]*u+cy[k]*v;
+                    let feq=w[k]*sRho*(1+3*cu+4.5*cu*cu-1.5*u2);
+                    let nVal=f[i*Q+k]*(1-omega)+feq*omega;
+                    let nx=x+cx[k], ny=y+cy[k];
+                    if(nx>=0&&nx<NX&&ny>=0&&ny<NY) f_new[(ny*NX+nx)*Q+k]=nVal;
+                    else f_new[i*Q+opp[k]]=nVal;
                 }
             }
         }
@@ -190,235 +195,239 @@
     }
 
     // ==========================================
-    // 2. PHYSICS ENGINE (Inverted Pendulum)
+    // 2. BALANCE PHYSICS (The Rocket Logic)
     // ==========================================
-    function updateTowerPhysics() {
-        // 1. Calculate Physics Properties of the Pile
-        let totalMass = 0;
-        let weightedHeight = 0; // To determine moment of inertia approx
+    function updatePhysics() {
+        const height = stack.length;
         
-        // Add active fluid mass
-        // (Simplified: Assume fluid adds weight at top)
-        const currentHeight = stack.length * 1.2;
-        const fluidMass = 20; 
+        // 1. Calculate "Top Heaviness"
+        // Quadratic scaling: Height^2. 
+        // At h=0, gravityForce is ~0. At h=50, it's strong.
+        const gravityFactor = BASE_INSTABILITY + (height * height * HEIGHT_SCALING);
         
-        totalMass += fluidMass;
-        weightedHeight += fluidMass * (currentHeight + 1);
-
-        // Add stack mass
-        stack.forEach((layer, index) => {
-            totalMass += layer.mass;
-            weightedHeight += layer.mass * (index * 1.2);
-        });
-
-        // 2. Calculate Stability Forces
-        // The Taller the stack (weightedHeight), the faster it falls
-        const instabilityFactor = 1.0 + (weightedHeight / 500.0); 
+        // 2. Forces
+        // Gravity pulls the tower further in the direction it's already leaning
+        const gForceX = tiltX * gravityFactor;
+        const gForceY = tiltY * gravityFactor;
         
-        // GRAVITY FORCE: Pushes tower further down if already tilted
-        const gravityForceX = Math.sin(towerAngleX) * GRAVITY_FACTOR * instabilityFactor;
-        const gravityForceY = Math.sin(towerAngleY) * GRAVITY_FACTOR * instabilityFactor;
+        // Control pushes back (Counter-Balance)
+        // We subtract input because we tilt Left to fix a Right lean
+        const cForceX = -inputX * CONTROL_POWER;
+        const cForceY = -inputY * CONTROL_POWER;
 
-        // CONTROL FORCE: User trying to push it back up
-        // We subtract input because we want to COUNTER the tilt
-        const correctionX = -inputTiltX * CONTROL_POWER;
-        const correctionY = -inputTiltY * CONTROL_POWER;
-
-        // 3. Integrate Euler
-        towerVelocityX += (gravityForceX + correctionX);
-        towerVelocityY += (gravityForceY + correctionY);
-
-        // Dampening (Air resistance / Friction)
-        towerVelocityX *= 0.98;
-        towerVelocityY *= 0.98;
-
-        towerAngleX += towerVelocityX;
-        towerAngleY += towerVelocityY;
-
-        // 4. Fail State
-        // If tilt exceeds ~25 degrees (0.45 rads), it topples
-        const maxTilt = 0.45;
-        const currentTilt = Math.sqrt(towerAngleX**2 + towerAngleY**2);
+        // 3. Integrate
+        velX += gForceX + cForceX;
+        velY += gForceY + cForceY;
         
-        // Update UI
-        updateHUD(currentTilt, maxTilt);
+        // Friction/Air Resistance
+        velX *= 0.95;
+        velY *= 0.95;
+        
+        tiltX += velX;
+        tiltY += velY;
 
-        if (currentTilt > maxTilt) {
-            gameOver();
+        // 4. UI Updates & Bounds
+        // Map tilt to pixels for the Bubble Level
+        // 1.0 tilt = Edge of screen roughly
+        const bubbleX = tiltX * 150; 
+        const bubbleY = -tiltY * 150; // Invert Y for screen coords
+        
+        const bubble = document.getElementById('bubble-level');
+        const safe = document.getElementById('safe-ring');
+        
+        bubble.style.transform = `translate(calc(-50% + ${bubbleX}px), calc(-50% + ${bubbleY}px))`;
+        
+        const dist = Math.sqrt(tiltX*tiltX + tiltY*tiltY);
+        
+        // Safety Threshold (The Ring)
+        const limit = 0.8; 
+        
+        if(dist > limit * 0.7) {
+            bubble.style.background = "red";
+            safe.style.borderColor = "red";
+        } else {
+            bubble.style.background = "#00ff00";
+            safe.style.borderColor = "rgba(0,255,0,0.3)";
         }
+
+        if(dist > limit) gameOver();
     }
 
     // ==========================================
-    // 3. VISUALS & LOGIC
+    // 3. VISUALS (Rocket View)
     // ==========================================
     function initThree() {
         scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 1000);
-        // Position camera to see the stack from an angle (Top-Side view)
-        camera.position.set(0, 30, 40); 
-        camera.lookAt(0, 5, 0);
+        scene.fog = new THREE.FogExp2(0x0b0b15, 0.02); // Depth cue
+
+        // Camera is looking STRAIGHT DOWN
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 40); 
+        camera.lookAt(0, 0, 0);
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // Lights
-        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-        const light = new THREE.PointLight(0xffaa00, 1, 100);
-        light.position.set(20, 30, 20);
-        light.castShadow = true;
+        const light = new THREE.DirectionalLight(0xffffff, 0.8);
+        light.position.set(10, 10, 50);
         scene.add(light);
+        scene.add(new THREE.AmbientLight(0x444444));
 
-        // Groups
-        // plateGroup rotates based on physics (The Tower)
-        plateGroup = new THREE.Group(); 
-        scene.add(plateGroup);
+        // Ground Group: Contains the plate and previous stack
+        // This group MOVES relative to the camera to simulate sway
+        groundGroup = new THREE.Group();
+        scene.add(groundGroup);
+
+        // The Launch Pad
+        const padGeo = new THREE.PlaneGeometry(200, 200);
+        const padMat = new THREE.MeshBasicMaterial({ color: 0x1a1a2a });
+        const pad = new THREE.Mesh(padGeo, padMat);
+        pad.position.z = -30; // Far below
+        groundGroup.add(pad);
+
+        // The Grid (Visual Reference for movement)
+        const grid = new THREE.GridHelper(200, 50, 0x333333, 0x111111);
+        grid.rotation.x = Math.PI/2;
+        grid.position.z = -29;
+        groundGroup.add(grid);
 
         stackGroup = new THREE.Group();
-        plateGroup.add(stackGroup);
+        groundGroup.add(stackGroup);
 
-        // The Plate
-        const plateGeo = new THREE.CylinderGeometry(10, 10, 1, 32);
-        const plateMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
-        const plate = new THREE.Mesh(plateGeo, plateMat);
-        plate.receiveShadow = true;
-        plateGroup.add(plate);
-
-        // The "Wet" Mesh
-        const geo = new THREE.PlaneGeometry(15, 15, NX-1, NY-1);
-        const mat = new THREE.MeshStandardMaterial({ 
-            color: 0xffcc00, roughness: 0.3, metalness: 0.1 
-        });
-        fluidMesh = new THREE.Mesh(geo, mat);
-        fluidMesh.rotation.x = -Math.PI/2;
-        // It sits on top of the current stack height
-        fluidMesh.position.y = 1.0; 
-        plateGroup.add(fluidMesh);
+        // Active Mesh (Attached to Camera/Scene, NOT Ground)
+        // It stays "with you" as you go up
+        const geo = new THREE.PlaneGeometry(12, 12, NX-1, NY-1);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.4 });
+        activeMesh = new THREE.Mesh(geo, mat);
+        scene.add(activeMesh);
     }
 
     function updateVisuals() {
-        // 1. Update Wet Mesh from LBM
-        const pos = fluidMesh.geometry.attributes.position.array;
+        // 1. Deform Active Mesh
+        const pos = activeMesh.geometry.attributes.position.array;
         for(let i=0; i<NX*NY; i++) {
             let d = rho[i];
             let h = 0;
-            if(d > 1.2) h = (d-1.2)*4.0;
-            pos[i*3+2] = h;
+            if(d>1.1) h = (d-1.1)*5.0;
+            pos[i*3+2] = h; // Z height
         }
-        fluidMesh.geometry.attributes.position.needsUpdate = true;
-        fluidMesh.geometry.computeVertexNormals();
+        activeMesh.geometry.attributes.position.needsUpdate=true;
 
-        // 2. Apply Physics Rotation to the World (The Balancing Act)
-        // We rotate the PLATE, not the camera, to simulate the object falling
-        plateGroup.rotation.x = towerAngleX;
-        plateGroup.rotation.z = towerAngleY; // Z axis maps to Y tilt in this orientation
-
-        // 3. Keep Fluid Mesh on top of stack
-        fluidMesh.position.y = 1.0 + (stack.length * 1.2);
+        // 2. THE ROCKET VIEW TRICK
+        // The camera is effectively at Z=40 relative to the current layer.
+        // The stack is below us.
+        // We move the `groundGroup` (the stack) in X/Y based on physics tilt.
+        
+        // If tower leans, the bottom moves AWAY from center
+        const swayX = -tiltX * 30.0; 
+        const swayY = tiltY * 30.0; // Y inverted for ThreeJS coords
+        
+        groundGroup.position.x = swayX;
+        groundGroup.position.y = swayY;
+        
+        // 3. Recede ground (Move it further away in Z as stack grows)
+        // We actually just move the stack group down, so camera stays at 0
+        const stackHeight = stack.length * 1.5; // Distance between layers
+        
+        // Smooth lerp for Z depth
+        const targetZ = -stackHeight;
+        groundGroup.position.z += (targetZ - groundGroup.position.z) * 0.1;
+        
+        // Visual fog enhances the "High Altitude" feel
     }
 
     function freezeLayer() {
         if(isGameOver) return;
 
-        // 1. Extract geometry from LBM
-        const frozenGeo = fluidMesh.geometry.clone();
-        const frozenMat = new THREE.MeshStandardMaterial({ 
-            color: 0xeeb022, roughness: 0.8 
-        });
-        const mesh = new THREE.Mesh(frozenGeo, frozenMat);
+        // Clone Active Layer
+        const mesh = activeMesh.clone();
+        mesh.material = activeMesh.material.clone();
+        mesh.material.color.setHex(0xcc8800); // Cooked color
         
-        // 2. Add to rigid stack
-        mesh.rotation.x = -Math.PI/2;
-        mesh.position.y = 1.0 + (stack.length * 1.2);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        // Add to stack group
+        // Important: It gets added at Z=0 (top), then the whole group slides down
+        // But we need to place it relative to the *current* ground group sway?
+        // Actually, in this frame of reference, the new layer is perfectly aligned 
+        // with the camera (0,0), but the stack below is offset.
+        // So we add it at 0,0 relative to the StackGroup, BUT we must account for the sway difference?
+        
+        // Simplification: Just stack them in Z. The visual sway is global.
+        mesh.position.z = stack.length * 1.5; 
         
         stackGroup.add(mesh);
-        stack.push({ mass: 10, mesh: mesh });
+        stack.push({});
+
+        // Update HUD
+        document.getElementById('score-text').innerText = stack.length + "m";
+        document.getElementById('altitude-fill').style.height = Math.min(stack.length, 100) + "%";
         
-        // 3. Update Score
-        document.getElementById('score').innerText = stack.length;
-
-        // 4. Reset Fluid
-        initLBM();
-    }
-
-    function updateHUD(tilt, max) {
-        // Stability Meter
-        const pct = (tilt / max) * 100;
-        const bar = document.getElementById('meter-fill');
-        
-        // Visually show Left/Right imbalance
-        // This is a simplification for the UI bar
-        bar.style.width = Math.min(pct, 100) + "%";
-        bar.style.left = (50 - Math.min(pct, 100)/2) + "%"; // Centered expansion
-
-        if(pct > 80) bar.style.background = "red";
-        else bar.style.background = "#00ff00";
-
-        // Timer Ring
-        const progress = (frameCount % ADD_INTERVAL) / ADD_INTERVAL;
-        const offset = 628 - (628 * progress);
-        document.querySelector('circle').style.strokeDashoffset = offset;
+        // Reset Fluid
+        currentOmega = initLBM();
     }
 
     function gameOver() {
         isGameOver = true;
-        document.querySelector('h1').innerText = "TOWER FELL";
+        document.querySelector('h1').innerText = "CONNECTION LOST";
+        document.querySelector('p').innerText = `Final Altitude: ${stack.length}m`;
+        document.getElementById('startBtn').innerText = "RE-IGNITE";
         document.getElementById('overlay').style.display = 'flex';
-        document.getElementById('startBtn').innerText = "TRY AGAIN";
+        
+        // Spin effect
+        new TWEEN.Tween(groundGroup.rotation)
+            .to({ z: 5 }, 3000)
+            .start();
     }
 
-    // --- MAIN LOOP ---
+    // --- LOOP ---
     let currentOmega = 1.0;
-
-    function animate() {
+    
+    function animate(time) {
         requestAnimationFrame(animate);
+        TWEEN.update(time);
         if(!isRunning || isGameOver) return;
 
-        // 1. Auto-Stack Timer
+        // Timer
         frameCount++;
-        if(frameCount % ADD_INTERVAL === 0) {
-            freezeLayer();
-            currentOmega = initLBM();
-        }
+        const progress = (frameCount % ADD_INTERVAL) / ADD_INTERVAL;
+        document.querySelector('circle').style.strokeDashoffset = 157 * progress;
 
-        // 2. Physics Steps
+        if(frameCount % ADD_INTERVAL === 0) freezeLayer();
+
         stepLBM(currentOmega);
-        updateTowerPhysics();
-
-        // 3. Render
+        updatePhysics();
         updateVisuals();
+        
         renderer.render(scene, camera);
     }
 
     // --- INPUTS ---
     function handleOrient(e) {
-        // Map gamma/beta to -1..1 range
-        let x = e.gamma || 0; // Left/Right
-        let y = e.beta || 0;  // Front/Back
+        if(isGameOver) return;
+        let x = e.gamma || 0; 
+        let y = e.beta || 0; 
         
-        // Clamp and Normalize
-        inputTiltX = Math.max(-30, Math.min(30, y)) / 30; // Swap X/Y for intuitive landscape feel?
-        inputTiltY = Math.max(-30, Math.min(30, x)) / 30;
+        // Flat Phone Logic
+        // Clamp -30 to 30 degrees
+        x = Math.max(-30, Math.min(30, x));
+        y = Math.max(-30, Math.min(30, y));
+        
+        // Normalize -1 to 1
+        inputX = x / 30; 
+        inputY = y / 30;
     }
-
+    
+    // Mouse fallback
     function handleMouse(e) {
-        // Desktop debugging
-        const x = (e.clientX / window.innerWidth)*2 - 1;
-        const y = (e.clientY / window.innerHeight)*2 - 1;
-        inputTiltY = x; // Mouse X controls Left/Right tilt
-        inputTiltX = y; // Mouse Y controls Front/Back tilt
+        inputX = (e.clientX / window.innerWidth) * 2 - 1;
+        inputY = (e.clientY / window.innerHeight) * 2 - 1;
     }
 
     document.getElementById('startBtn').addEventListener('click', () => {
         if(isGameOver) location.reload();
-        
         if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission()
-                .then(r => { if(r==='granted') window.addEventListener('deviceorientation', handleOrient); })
-                .catch(console.error);
+                .then(r=>{if(r==='granted')window.addEventListener('deviceorientation', handleOrient)});
         } else {
             window.addEventListener('deviceorientation', handleOrient);
         }
@@ -430,12 +439,13 @@
         currentOmega = initLBM();
         animate();
     });
-
+    
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth/window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
+
 </script>
 </body>
 </html>
