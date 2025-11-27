@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 2D LBM Airfoil Simulation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+            overflow-y: auto;
+        }
+        h1 { margin-bottom: 10px; font-weight: 300; }
+        .container {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            text-align: center;
+            max-width: 950px;
+            width: 100%;
+        }
+        .canvas-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 10px;
+            width: 100%;
+            max-width: 800px; 
+        }
+        canvas {
+            background-color: #000;
+            border: 1px solid #444;
+            image-rendering: pixelated;
+            width: 100%;
+            height: auto;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        .legend-overlay {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 6px;
+            border-radius: 4px;
+            pointer-events: none;
+            font-size: 11px;
+            color: #fff;
+            text-align: left;
+            border: 1px solid #555;
+        }
+        .legend-bar {
+            width: 100px;
+            height: 10px;
+            margin-top: 4px;
+            margin-bottom: 2px;
+        }
+        .controls {
+            margin-top: 15px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            text-align: left;
+        }
+        .control-group {
+            background: #333;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+        }
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 0.95em;
+            color: #64b5f6;
+            border-bottom: 1px solid #555;
+            padding-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        label { display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 5px; color: #ccc; }
+        input[type="range"], select { width: 100%; cursor: pointer; margin-bottom: 8px; }
+        select { background: #222; color: #fff; border: 1px solid #555; padding: 4px; border-radius: 3px; }
+        
+        .stats {
+            margin-top: 10px;
+            font-family: 'Consolas', monospace;
+            color: #69f0ae;
+            font-size: 0.9em;
+            background: #111;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #333;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            text-align: center;
+        }
+        button {
+            margin-top: 5px;
+            padding: 10px 20px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: background 0.2s;
+            width: 100%;
+        }
+        button:hover { background-color: #1976D2; }
+        .instructions {
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Interactive LBM Airfoil Simulation</h1>
+    
+    <div class="container">
+        <div class="canvas-wrapper">
+            <canvas id="simCanvas"></canvas>
+            <div class="legend-overlay" id="legendBox">
+                <div id="legendTitle">Velocity</div>
+                <div class="legend-bar" id="legendGradient" style="background: linear-gradient(to right, blue, cyan, lime, yellow, red);"></div>
+                <div style="display:flex; justify-content:space-between; font-size:10px;">
+                    <span id="legendMin">0</span>
+                    <span id="legendMax">Max</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <div id="stat-phys">Re: 0<br>Ma: 0.00</div>
+            <div id="stat-sim">Steps: 0<br>Time: 0.0s</div>
+            <div id="stat-perf">FPS: 0<br>MLUPS: 0</div>
+        </div>
+        <div class="instructions">
+            Drag the airfoil to move it. Change resolution to reset & resize grid.
+        </div>
+
+        <div class="controls">
+            <!-- Performance & Display -->
+            <div class="control-group">
+                <h3>Performance & Display</h3>
+                <label>Resolution (Grid Size)</label>
+                <select id="resolutionSelect">
+                    <option value="low">Low (200x75) - Fast</option>
+                    <option value="medium" selected>Medium (400x150) - Balanced</option>
+                    <option value="high">High (600x225) - Detailed</option>
+                </select>
+
+                <label>Steps per Frame <span id="val-spf">2</span></label>
+                <input type="range" id="spfRange" min="1" max="10" step="1" value="2">
+
+                <label>Visualization Mode</label>
+                <select id="plotSelect">
+                    <option value="velocity" selected>Velocity Magnitude</option>
+                    <option value="vorticity">Vorticity (Curl)</option>
+                    <option value="density">Pressure / Density</option>
+                </select>
+            </div>
+
+            <!-- Simulation Parameters -->
+            <div class="control-group">
+                <h3>Physics</h3>
+                <label>Viscosity (nu) <span id="val-visc">0.020</span></label>
+                <input type="range" id="viscosityRange" min="0.005" max="0.1" step="0.001" value="0.02">
+                
+                <label>Inlet Speed <span id="val-speed">0.10</span></label>
+                <input type="range" id="speedRange" min="0.01" max="0.2" step="0.01" value="0.1">
+
+                <button id="resetBtn">Reset Flow</button>
+            </div>
+
+            <!-- Airfoil Shape (NACA) -->
+            <div class="control-group">
+                <h3>Airfoil Geometry</h3>
+                <label>Max Camber (M) <span id="val-m">2%</span></label>
+                <input type="range" id="nacaM" min="0" max="9" step="1" value="2">
+
+                <label>Camber Pos (P) <span id="val-p">40%</span></label>
+                <input type="range" id="nacaP" min="0" max="9" step="1" value="4">
+
+                <label>Thickness (T) <span id="val-t">12%</span></label>
+                <input type="range" id="nacaT" min="1" max="40" step="1" value="12">
+                
+                <label>Angle of Attack <span id="val-alpha">0°</span></label>
+                <input type="range" id="angleRange" min="-45" max="45" step="1" value="0">
+            </div>
+        </div>
+    </div>
+
+<script>
+try {
+    /**
+     * Advanced Interactive LBM D2Q9 Solver
+     * Features: Dynamic pressure scaling, Resolution control, NACA generator, Dragging, Vorticity/Pressure plotting
+     */
+
+    // --- Configuration ---
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    
+    // Stats Elements
+    const statPhys = document.getElementById('stat-phys');
+    const statSim = document.getElementById('stat-sim');
+    const statPerf = document.getElementById('stat-perf');
+
+    // UI Elements
+    const legendTitle = document.getElementById('legendTitle');
+    const legendGradient = document.getElementById('legendGradient');
+    const legendMin = document.getElementById('legendMin');
+    const legendMax = document.getElementById('legendMax');
+
+    // --- Simulation Globals (Mutable for resizing) ---
+    let nx = 400; 
+    let ny = 150; 
+    const q = 9;
+
+    // Physics Constants
+    let kinVisc = 0.02;
+    let targetSpeed = 0.1;
+    const C_Smagorinsky = 0.15;
+    const cs2 = 1.0 / 3.0;
+
+    // D2Q9 Constants
+    const ex = [0, 1, 0, -1, 0, 1, -1, -1, 1];
+    const ey = [0, 0, 1, 0, -1, 1, 1, -1, -1];
+    const w  = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
+    const opp = [0, 3, 4, 1, 2, 7, 8, 5, 6];
+
+    // Arrays (Allocated in initMemory)
+    let f, f_new, rho, ux, uy, obstacle;
+    let imageBuffer, pixelData;
+    const feq_store = new Float32Array(9);
+    
+    // Custom Colors for Airfoil and Fluid
+    const BLACK = 0xFF000000;
+    const WHITE = 0xFFFFFFFF; // Added White color for the internal obstacle body
+
+    // State
+    let timeStep = 0;
+    let currentInletVel = 0.0;
+    let running = true;
+    let stepsPerFrame = 2;
+    let plotMode = 'velocity'; // velocity, vorticity, density
+    
+    // Performance
+    let lastTime = performance.now();
+    let frameCount = 0;
+
+    // Dragging
+    let dragging = false;
+    let dragOffset = { x:0, y:0 };
+
+    // Airfoil
+    let airfoilConfig = {
+        xRel: 0.25, // Relative position 0-1
+        yRel: 0.5,
+        chordRel: 0.15, // Relative to width
+        m: 2, p: 4, t: 12, angle: 0
+    };
+
+    // --- Memory Management ---
+
+    function initMemory(newNx, newNy) {
+        nx = newNx;
+        ny = newNy;
+        canvas.width = nx;
+        canvas.height = ny;
+
+        const totalCells = nx * ny;
+        f = new Float32Array(totalCells * q);
+        f_new = new Float32Array(totalCells * q);
+        rho = new Float32Array(totalCells);
+        ux = new Float32Array(totalCells);
+        uy = new Float32Array(totalCells);
+        obstacle = new Uint8Array(totalCells);
+
+        imageBuffer = ctx.createImageData(nx, ny);
+        pixelData = new Uint32Array(imageBuffer.data.buffer);
+    }
+
+    // --- Core LBM Functions ---
+
+    function computeEquilibrium(dest, r, u, v) {
+        const u2 = u * u + v * v;
+        const term1 = 1.5 * u2;
+        for (let k = 0; k < 9; k++) {
+            const cu = ex[k] * u + ey[k] * v;
+            dest[k] = w[k] * r * (1 + 3 * cu + 4.5 * cu * cu - term1);
+        }
+    }
+
+    function initFlow() {
+        timeStep = 0;
+        currentInletVel = 0.0;
+        
+        // Initialize flow fields to equilibrium
+        computeEquilibrium(feq_store, 1.0, 0.0, 0.0);
+        const totalCells = nx * ny;
+        for (let i = 0; i < totalCells; i++) {
+            rho[i] = 1.0;
+            ux[i] = 0.0;
+            uy[i] = 0.0;
+            for (let k = 0; k < q; k++) {
+                f[i * q + k] = feq_store[k];
+                f_new[i * q + k] = feq_store[k];
+            }
+        }
+        updateObstacleMap();
+        updateLegend();
+    }
+
+    // --- NACA Generator & Obstacles ---
+
+    function generateNACA4Points(m, p, t, c) {
+        const points = [];
+        const steps = 40; 
+        for (let i = 0; i <= steps; i++) {
+            const beta = (i / steps) * Math.PI;
+            const x = (1.0 - Math.cos(beta)) / 2.0;
+            const yt = 5 * t * (0.2969 * Math.sqrt(x) - 0.1260 * x - 0.3516 * Math.pow(x,2) + 0.2843 * Math.pow(x,3) - 0.1015 * Math.pow(x,4));
+            let yc = 0, dyc_dx = 0;
+            if (m > 0) {
+                if (x < p) {
+                    yc = (m / (p * p)) * (2 * p * x - x * x);
+                    dyc_dx = (2 * m / (p * p)) * (p - x);
+                } else {
+                    yc = (m / ((1 - p) * (1 - p))) * ((1 - 2 * p) + 2 * p * x - x * x);
+                    dyc_dx = (2 * m / ((1 - p) * (1 - p))) * (p - x);
+                }
+            }
+            const theta = Math.atan(dyc_dx);
+            points.push({ x: (x - yt * Math.sin(theta)) * c, y: (yc + yt * Math.cos(theta)) * c });
+            points.push({ x: (x + yt * Math.sin(theta)) * c, y: (yc - yt * Math.cos(theta)) * c });
+        }
+        // Polygon sort
+        const upper = [], lower = [];
+        for(let i=0; i<points.length; i+=2) { upper.push(points[i]); lower.push(points[i+1]); }
+        return upper.concat(lower.reverse());
+    }
+
+    function updateObstacleMap() {
+        // Clear dynamic obstacles
+        const totalCells = nx * ny;
+        for (let i = 0; i < totalCells; i++) {
+            const y = Math.floor(i / nx);
+            // Re-apply solid top/bottom walls
+            if (y === 0 || y === ny - 1) {
+                obstacle[i] = 1;
+            } else {
+                if (obstacle[i] === 1) {
+                    // Refill flow when obstacle is removed
+                    rho[i] = 1.0; ux[i] = currentInletVel; uy[i] = 0.0;
+                    computeEquilibrium(feq_store, 1.0, currentInletVel, 0.0);
+                    for(let k=0; k<q; k++) f[i*q+k] = feq_store[k];
+                }
+                obstacle[i] = 0;
+            }
+        }
+
+        // Generate Airfoil
+        const m = airfoilConfig.m / 100.0;
+        const p = airfoilConfig.p / 10.0;
+        const t = airfoilConfig.t / 100.0;
+        const chord = nx * airfoilConfig.chordRel;
+        const rawPoly = generateNACA4Points(m, p, t, chord);
+
+        const rad = airfoilConfig.angle * (Math.PI / 180);
+        const cosA = Math.cos(rad), sinA = Math.sin(rad);
+        
+        const absX = nx * airfoilConfig.xRel;
+        const absY = ny * airfoilConfig.yRel;
+
+        const finalPoly = rawPoly.map(pt => ({
+            x: absX + (pt.x * cosA - pt.y * sinA),
+            y: absY + (pt.x * sinA + pt.y * cosA)
+        }));
+
+        // Rasterize
+        let minX=nx, maxX=0, minY=ny, maxY=0;
+        for(let pt of finalPoly) {
+            if(pt.x<minX) minX=pt.x; if(pt.x>maxX) maxX=pt.x;
+            if(pt.y<minY) minY=pt.y; if(pt.y>maxY) maxY=pt.y;
+        }
+        minX = Math.max(0, Math.floor(minX)); maxX = Math.min(nx, Math.ceil(maxX));
+        minY = Math.max(1, Math.floor(minY)); maxY = Math.min(ny-1, Math.ceil(maxY));
+
+        for(let y = minY; y < maxY; y++) {
+            for(let x = minX; x < maxX; x++) {
+                if(isPointInPoly(x, y, finalPoly)) obstacle[y*nx+x] = 1;
+            }
+        }
+    }
+
+    function isPointInPoly(x, y, poly) {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const xi = poly[i].x, yi = poly[i].y;
+            const xj = poly[j].x, yj = poly[j].y;
+            const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    // --- Solver ---
+
+    function simulate() {
+        // Ramp up velocity slowly
+        if (currentInletVel < targetSpeed) currentInletVel += 0.0005;
+        else currentInletVel = targetSpeed;
+
+        let i = 0;
+        for (let y = 0; y < ny; y++) {
+            for (let x = 0; x < nx; x++, i++) {
+                if (obstacle[i]) continue;
+
+                // Collision: Calculate macroscopic properties (rho, u, v)
+                let r = f[i*q] + f[i*q+1] + f[i*q+2] + f[i*q+3] + f[i*q+4] + f[i*q+5] + f[i*q+6] + f[i*q+7] + f[i*q+8];
+                
+                // Stabilization check (simple)
+                if (isNaN(r) || r < 0.01 || r > 3.0) {
+                    r = 1.0; 
+                    computeEquilibrium(feq_store, 1.0, 0, 0);
+                    for(let k=0; k<q; k++) f[i*q+k] = feq_store[k];
+                }
+
+                const u = ((f[i*q+1] + f[i*q+5] + f[i*q+8]) - (f[i*q+3] + f[i*q+6] + f[i*q+7])) / r;
+                const v = ((f[i*q+2] + f[i*q+5] + f[i*q+6]) - (f[i*q+4] + f[i*q+7] + f[i*q+8])) / r;
+
+                rho[i] = r; ux[i] = u; uy[i] = v;
+
+                // Collide
+                computeEquilibrium(feq_store, r, u, v);
+                
+                // LES (Smagorinsky-like model for effective viscosity)
+                let Qxx = 0, Qxy = 0, Qyy = 0;
+                for(let k=1; k<9; k++) {
+                    const f_neq = f[i*q+k] - feq_store[k];
+                    Qxx += ex[k]*ex[k]*f_neq;
+                    Qxy += ex[k]*ey[k]*f_neq;
+                    Qyy += ey[k]*ey[k]*f_neq;
+                }
+                const Pi = Math.sqrt(Qxx*Qxx + 2*Qxy*Qxy + Qyy*Qyy);
+                const tau0 = 3.0 * kinVisc + 0.5;
+                const S_mag = Pi / r;
+                const tau_eff = 0.5 * (tau0 + Math.sqrt(tau0*tau0 + 18.0*C_Smagorinsky*C_Smagorinsky*S_mag));
+                const omega = 1.0 / tau_eff;
+
+                for(let k=0; k<q; k++) {
+                    f[i*q+k] = f[i*q+k] * (1.0 - omega) + feq_store[k] * omega;
+                }
+            }
+        }
+
+        // Stream
+        i = 0;
+        for (let y = 0; y < ny; y++) {
+            for (let x = 0; x < nx; x++, i++) {
+                if (obstacle[i]) continue;
+                for (let k = 0; k < 9; k++) {
+                    const sx = x - ex[k];
+                    const sy = y - ey[k];
+                    if (sx >= 0 && sx < nx && sy >= 0 && sy < ny) {
+                        const si = sy*nx + sx;
+                        // Bounce back for fluid neighbors of an obstacle
+                        if (obstacle[si]) f_new[i*q+k] = f[i*q+opp[k]];
+                        else f_new[i*q+k] = f[si*q+k];
+                    } else {
+                        // Boundary Conditions
+                        if (sx < 0) { // Inlet (Velocity Boundary)
+                            computeEquilibrium(feq_store, 1.0, currentInletVel, 0.0);
+                            f_new[i*q+k] = feq_store[k];
+                        } else if (sx >= nx) { // Outlet (Convective / Zeroth-order)
+                            f_new[i*q+k] = f[(y*nx+nx-2)*q+k];
+                        } else { // Top/Bottom Walls (Bounce-back is handled by obstacle map)
+                            f_new[i*q+k] = f[i*q+opp[k]];
+                        }
+                    }
+                }
+            }
+        }
+        let temp = f; f = f_new; f_new = temp;
+        timeStep++;
+    }
+
+    // --- Render ---
+
+    // Color mapping helpers
+    function getJetColor(t) {
+        t = Math.max(0, Math.min(1, t));
+        let r=0, g=0, b=0;
+        if (t < 0.25) { r=0; g=4*t*255; b=255; }
+        else if (t < 0.5) { r=0; g=255; b=255-4*(t-0.25)*255; }
+        else if (t < 0.75) { r=4*(t-0.5)*255; g=255; b=0; }
+        else { r=255; g=255-4*(t-0.75)*255; b=0; }
+        return (255<<24) | (Math.floor(b)<<16) | (Math.floor(g)<<8) | Math.floor(r);
+    }
+
+    function getVorticityColor(curl) {
+        // Range: -0.03 to 0.03 for a good visual spread
+        const range = 0.03;
+        let t = (curl + range) / (2 * range); // 0 to 1
+        t = Math.max(0, Math.min(1, t));
+        let r=0, g=0, b=0;
+        // Blue (low) -> Black (zero) -> Red (high)
+        if (t < 0.5) {
+            const i = (t * 2); // 0 to 1
+            b = (1.0 - i) * 255;
+        } else {
+            const i = (t - 0.5) * 2; // 0 to 1
+            r = i * 255;
+        }
+        return (255<<24) | (Math.floor(b)<<16) | (Math.floor(g)<<8) | Math.floor(r);
+    }
+
+    // Dynamic color mapping for density
+    function getPressureColor(rhoVal, minRho, maxRho) {
+        // If the range is too small (e.g., during initialization), use a fixed fallback range
+        const range = maxRho - minRho;
+        let t;
+
+        if (range < 0.000001) { // Fallback to center color if no variation
+            t = 0.5;
+        } else {
+            // Normalize rhoVal based on the current dynamic range
+            t = (rhoVal - minRho) / range;
+        }
+
+        return getJetColor(t);
+    }
+
+    function render() {
+        let maxVel = 0;
+        let minDensity = 1.0001, maxDensity = 0.9999; 
+        
+        // First pass: Calculate min/max density (only needed if plotting density)
+        if (plotMode === 'density') {
+             for (let i = 0; i < nx * ny; i++) {
+                if (!obstacle[i]) {
+                    const r = rho[i];
+                    if (r < minDensity) minDensity = r;
+                    if (r > maxDensity) maxDensity = r;
+                }
+            }
+        }
+        
+        // Second pass: Plotting
+        for (let y = 0; y < ny; y++) {
+            for (let x = 0; x < nx; x++) {
+                const i = y * nx + x;
+                
+                if (obstacle[i]) {
+                    let isBoundary = false;
+                    // Check D2Q9 neighbors (excluding center, k=1 to 8)
+                    for (let k = 1; k < 9; k++) {
+                        const nx_nb = x + ex[k];
+                        const ny_nb = y + ey[k];
+                        
+                        // Check bounds first
+                        if (nx_nb >= 0 && nx_nb < nx && ny_nb >= 0 && ny_nb < ny) {
+                            const i_nb = ny_nb * nx + nx_nb;
+                            // If neighbor is NOT an obstacle, this cell is a boundary cell
+                            if (!obstacle[i_nb]) {
+                                isBoundary = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Apply the requested color scheme: Black line (boundary) over White body (internal)
+                    pixelData[i] = isBoundary ? BLACK : WHITE;
+                    continue;
+                } 
+                
+                if (plotMode === 'velocity') {
+                    const vel = Math.sqrt(ux[i]*ux[i] + uy[i]*uy[i]);
+                    if (vel > maxVel) maxVel = vel;
+                    // Map velocity relative to 1.5x inlet speed
+                    pixelData[i] = getJetColor(vel / (targetSpeed * 1.5));
+
+                } else if (plotMode === 'density') {
+                    // Use dynamic range for coloring
+                    pixelData[i] = getPressureColor(rho[i], minDensity, maxDensity);
+
+                } else if (plotMode === 'vorticity') {
+                    // Curl = dv/dx - du/dy (Central difference approximation)
+                    const x1 = (x < nx-1) ? x+1 : x;
+                    const x0 = (x > 0) ? x-1 : x;
+                    const y1 = (y < ny-1) ? y+1 : y;
+                    const y0 = (y > 0) ? y-1 : y;
+                    
+                    const dv_dx = (uy[y*nx + x1] - uy[y*nx + x0]) / 2.0; 
+                    const du_dy = (ux[y1*nx + x] - ux[y0*nx + x]) / 2.0; 
+                    
+                    pixelData[i] = getVorticityColor(dv_dx - du_dy);
+                }
+            }
+        }
+        
+        ctx.putImageData(imageBuffer, 0, 0);
+        
+        // Update legend values based on plot mode
+        if (plotMode === 'velocity') {
+            legendMin.innerText = "0"; 
+            legendMax.innerText = (targetSpeed * 1.5).toFixed(2);
+        } else if (plotMode === 'density') {
+            // Show ACTUAL dynamic min/max density for user reassurance
+            legendMin.innerText = minDensity.toFixed(4); 
+            legendMax.innerText = maxDensity.toFixed(4);
+        } else if (plotMode === 'vorticity') {
+            legendMin.innerText = "-CW"; 
+            legendMax.innerText = "+CCW";
+        }
+    }
+
+    // --- Loop & Perf ---
+
+    function updateStats() {
+        const now = performance.now();
+        const dt = now - lastTime;
+        
+        if (dt >= 1000) {
+            const fps = Math.round((frameCount * 1000) / dt);
+            const mlups = ((nx * ny * stepsPerFrame * fps) / 1e6).toFixed(2);
+            
+            statPerf.innerHTML = `FPS: ${fps}<br>MLUPS: ${mlups}`;
+            
+            const chordPx = nx * airfoilConfig.chordRel;
+            // Reynolds Number (Re = U * L / nu)
+            const Re = (currentInletVel * chordPx) / kinVisc;
+            // Mach number (Ma = U / Cs), Cs = 1/sqrt(3) approx 0.577 in LBM
+            const Ma = currentInletVel / 0.577;
+            
+            statPhys.innerHTML = `Re: ${Re.toFixed(0)}<br>Ma: ${Ma.toFixed(2)}`;
+            statSim.innerHTML = `Steps: ${timeStep}<br>Time: ${(timeStep*1).toFixed(0)}`; 
+
+            lastTime = now;
+            frameCount = 0;
+        }
+        frameCount++;
+    }
+
+    function loop() {
+        if (running) {
+            try {
+                for(let k=0; k<stepsPerFrame; k++) simulate();
+                render();
+                updateStats();
+            } catch (e) {
+                running = false;
+                console.error(e);
+                // Use a custom message box instead of alert()
+                const message = document.createElement('div');
+                message.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#f44336;color:white;padding:20px;border-radius:5px;z-index:100;box-shadow:0 0 10px rgba(0,0,0,0.8);';
+                message.innerHTML = `<strong>Simulation Crashed!</strong><br>Error: ${e.message}<br><small>See console for details.</small>`;
+                document.body.appendChild(message);
+            }
+        }
+        requestAnimationFrame(loop);
+    }
+
+    // --- Inputs ---
+
+    function updateLegend() {
+        if(plotMode === 'velocity') {
+            legendTitle.innerText = "Velocity Mag";
+            legendGradient.style.background = "linear-gradient(to right, blue, cyan, lime, yellow, red)";
+            legendMin.innerText = "0"; legendMax.innerText = (targetSpeed*1.5).toFixed(2);
+        } else if (plotMode === 'density') {
+            legendTitle.innerText = "Density (Pressure) - Dynamic Range";
+            legendGradient.style.background = "linear-gradient(to right, blue, cyan, lime, yellow, red)";
+            // Placeholder: values will be updated in render()
+            legendMin.innerText = "0.9999"; legendMax.innerText = "1.0001";
+        } else if (plotMode === 'vorticity') {
+            legendTitle.innerText = "Vorticity (Curl)";
+            legendGradient.style.background = "linear-gradient(to right, blue, black, red)";
+            legendMin.innerText = "-CW"; legendMax.innerText = "+CCW";
+        }
+    }
+
+    document.getElementById('resolutionSelect').addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === 'low') initMemory(200, 75);
+        else if (val === 'medium') initMemory(400, 150);
+        else if (val === 'high') initMemory(600, 225);
+        initFlow();
+    });
+
+    document.getElementById('spfRange').addEventListener('input', (e) => {
+        stepsPerFrame = parseInt(e.target.value);
+        document.getElementById('val-spf').innerText = stepsPerFrame;
+    });
+
+    document.getElementById('plotSelect').addEventListener('change', (e) => {
+        plotMode = e.target.value;
+        updateLegend();
+    });
+
+    // Physics Sliders
+    document.getElementById('viscosityRange').addEventListener('input', (e) => {
+        kinVisc = parseFloat(e.target.value);
+        document.getElementById('val-visc').innerText = kinVisc.toFixed(3);
+    });
+    document.getElementById('speedRange').addEventListener('input', (e) => {
+        targetSpeed = parseFloat(e.target.value);
+        document.getElementById('val-speed').innerText = targetSpeed.toFixed(2);
+        updateLegend();
+    });
+
+    // NACA Sliders
+    const updateAirfoil = () => { updateObstacleMap(); };
+    document.getElementById('nacaM').addEventListener('input', (e) => {
+        airfoilConfig.m = parseInt(e.target.value);
+        document.getElementById('val-m').innerText = airfoilConfig.m + "%";
+        updateAirfoil();
+    });
+    document.getElementById('nacaP').addEventListener('input', (e) => {
+        airfoilConfig.p = parseInt(e.target.value);
+        document.getElementById('val-p').innerText = (airfoilConfig.p*10) + "%";
+        updateAirfoil();
+    });
+    document.getElementById('nacaT').addEventListener('input', (e) => {
+        airfoilConfig.t = parseInt(e.target.value);
+        document.getElementById('val-t').innerText = airfoilConfig.t + "%";
+        updateAirfoil();
+    });
+    document.getElementById('angleRange').addEventListener('input', (e) => {
+        airfoilConfig.angle = parseInt(e.target.value);
+        document.getElementById('val-alpha').innerText = airfoilConfig.angle + "°";
+        updateAirfoil();
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', initFlow);
+
+    // Dragging Logic
+    function getMousePos(e) {
+        const rect = canvas.getBoundingClientRect();
+        // Correct for resolution vs css size
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        let cx = e.clientX, cy = e.clientY;
+        if(e.touches && e.touches.length > 0) { cx=e.touches[0].clientX; cy=e.touches[0].clientY; }
+        return { x: (cx - rect.left) * scaleX, y: (cy - rect.top) * scaleY };
+    }
+
+    const handleStart = (e) => {
+        const pos = getMousePos(e);
+        const ax = nx * airfoilConfig.xRel;
+        const ay = ny * airfoilConfig.yRel;
+        // Simple radius check (approx 15% of screen width is chord, so check within that)
+        const radius = nx * 0.1; 
+        const dist = Math.sqrt((pos.x-ax)**2 + (pos.y-ay)**2);
+        if (dist < radius) {
+            dragging = true;
+            dragOffset.x = pos.x - ax;
+            dragOffset.y = pos.y - ay;
+            canvas.style.cursor = 'grabbing';
+            if(e.type === 'touchstart') e.preventDefault();
+        }
+    };
+
+    const handleMove = (e) => {
+        if (!dragging) return;
+        const pos = getMousePos(e);
+        let nxPos = pos.x - dragOffset.x;
+        let nyPos = pos.y - dragOffset.y;
+        
+        // Update relative config
+        airfoilConfig.xRel = Math.max(0.05, Math.min(0.95, nxPos / nx));
+        airfoilConfig.yRel = Math.max(0.1, Math.min(0.9, nyPos / ny));
+        
+        updateObstacleMap();
+        if(e.type === 'touchmove') e.preventDefault();
+    };
+
+    const handleEnd = () => { dragging = false; canvas.style.cursor = 'crosshair'; };
+
+    canvas.addEventListener('mousedown', handleStart);
+    canvas.addEventListener('touchstart', handleStart, {passive:false});
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('touchmove', handleMove, {passive:false});
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchend', handleEnd);
+
+    // Boot
+    initMemory(400, 150);
+    initFlow();
+    loop();
+
+} catch (err) {
+    document.body.innerHTML = `<h2 style="color:red">Simulation Initialization Error</h2><p style="color:#eee">Could not start the simulation. This is usually due to a browser security setting or an unexpected error during memory allocation.</p><pre style="color:red">${err.message}</pre>`;
+}
+</script>
+</body>
+</html>
