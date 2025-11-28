@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>LBM Wind & Viscosity</title>
+    <title>LBM Droplet UX</title>
     <style>
         body { margin: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', sans-serif; user-select: none; }
         #overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; justify-content: center; align-items: center;
-            background: rgba(0,0,0,0.8); color: white; z-index: 10;
-            flex-direction: column; text-align: center; backdrop-filter: blur(8px);
+            background: rgba(0,0,0,0.6); color: white; z-index: 10;
+            flex-direction: column; text-align: center; backdrop-filter: blur(5px);
         }
         h1 { margin-bottom: 5px; font-weight: 300; letter-spacing: 2px; }
-        p { color: #aaa; font-size: 14px; margin-bottom: 30px; line-height: 1.5; }
+        p { color: #aaa; font-size: 14px; margin-bottom: 30px; }
         button {
             padding: 18px 40px; font-size: 16px; background: white;
             border: none; border-radius: 30px; color: #000; cursor: pointer; 
@@ -21,44 +21,31 @@
             font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
         }
         button:active { transform: scale(0.95); }
-        
-        #ui-layer { pointer-events: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        
+        #hint { 
+            position: absolute; bottom: 30px; width: 100%; text-align: center; 
+            color: rgba(255,255,255,0.3); pointer-events: none; font-size: 12px;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
         #viscosity-label {
             position: absolute; top: 30px; width: 100%; text-align: center;
-            color: rgba(255,255,255,0.9); font-size: 16px;
-            font-weight: 600; letter-spacing: 3px; text-transform: uppercase;
+            color: rgba(255,255,255,0.8); pointer-events: none; font-size: 16px;
+            font-weight: 300; letter-spacing: 4px; text-transform: uppercase;
             text-shadow: 0 2px 10px rgba(0,0,0,0.5);
-        }
-        #mic-label {
-            position: absolute; bottom: 30px; width: 100%; text-align: center;
-            color: rgba(255,255,255,0.4); font-size: 12px;
-            text-transform: uppercase; letter-spacing: 1px;
-        }
-        .bar { 
-            position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
-            width: 200px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px;
-        }
-        #mic-bar {
-            width: 0%; height: 100%; background: #00aaff; border-radius: 2px;
-            transition: width 0.1s;
+            transition: color 0.3s;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<div id="ui-layer">
-    <div id="viscosity-label">WATER</div>
-    <div class="bar"><div id="mic-bar"></div></div>
-    <div id="mic-label">Blow into Mic for Wind • Drag to Thicken</div>
-</div>
+<div id="viscosity-label">WATER</div>
+<div id="hint">Tilt to Move • Drag Up/Down to Thicken</div>
 
 <div id="overlay">
     <div>
-        <h1>FLUID LAB</h1>
-        <p>Interactive Physics Demo<br>Requires Microphone & Gyroscope</p>
-        <button id="startBtn">Start Simulation</button>
+        <h1>LIQUID UX</h1>
+        <p>Interactive Surface Demo</p>
+        <button id="startBtn">Initialize</button>
     </div>
 </div>
 
@@ -68,11 +55,12 @@
     const NY = 64;
     const Q = 9; 
     
-    // Viscosity State
+    // DYNAMIC VARIABLES (Changed from const to let)
+    // Range: 0.02 (Water) to 0.25 (Thick Honey)
     let viscosity = 0.02; 
     let omega = 1.0 / (3.0 * viscosity + 0.5);
 
-    // --- LBM ARRAYS ---
+    // --- LBM VARIABLES ---
     const SIZE = NX * NY * Q;
     let f = new Float32Array(SIZE);
     let f_new = new Float32Array(SIZE);
@@ -80,47 +68,20 @@
     let ux = new Float32Array(NX * NY);  
     let uy = new Float32Array(NX * NY);  
 
-    // Weights/Vectors (D2Q9)
+    // Weights and Vectors (D2Q9)
     const w = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
     const cx = [0, 1, 0, -1, 0, 1, -1, -1, 1];
     const cy = [0, 0, 1, 0, -1, 1, 1, -1, -1];
     const opposite = [0, 3, 4, 1, 2, 7, 8, 5, 6]; 
 
-    // Physics Inputs
-    let gravityX = 0.0, gravityY = 0.0;
-    let targetGravityX = 0.0, targetGravityY = 0.0;
-    let windForce = 0.0; // From Microphone
+    // Physics State
+    let gravityX = 0.0;
+    let gravityY = 0.0;
+    
+    // Smoothing variables (Lerp)
+    let targetGravityX = 0.0;
+    let targetGravityY = 0.0;
     let running = false;
-
-    // --- AUDIO / MICROPHONE SETUP ---
-    let audioContext, analyser, dataArray;
-    let hasMic = false;
-
-    async function setupAudio() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioContext.createMediaStreamSource(stream);
-            analyser = audioContext.createAnalyser();
-            analyser.fftSize = 64; // Low resolution is enough for volume
-            analyser.smoothingTimeConstant = 0.8;
-            source.connect(analyser);
-            dataArray = new Uint8Array(analyser.frequencyBinCount);
-            hasMic = true;
-        } catch (err) {
-            console.warn("Microphone access denied:", err);
-            document.getElementById('mic-label').innerText = "Microphone Access Denied (Wind Disabled)";
-        }
-    }
-
-    function getVolume() {
-        if (!hasMic) return 0;
-        analyser.getByteFrequencyData(dataArray);
-        // Calculate average volume
-        let sum = 0;
-        for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        return sum / dataArray.length; // 0 to 255
-    }
 
     // --- 1. INITIALIZATION ---
     function initLBM() {
@@ -128,39 +89,42 @@
             for (let x = 0; x < NX; x++) {
                 const idx = y * NX + x;
                 
-                // Center Drop
+                // Create a Gaussian Drop in the center
                 const dx = x - NX/2;
                 const dy = y - NY/2;
                 const distSq = dx*dx + dy*dy;
                 
+                // Drop radius approx 10-12 grid units
                 let initialRho = 1.0;
                 if (distSq < 100) {
+                    // Smooth hump
                     initialRho += 1.5 * Math.exp(-distSq / 50);
                 }
 
                 rho[idx] = initialRho;
-                ux[idx] = 0; uy[idx] = 0;
+                ux[idx] = 0;
+                uy[idx] = 0;
 
-                for (let i = 0; i < Q; i++) f[idx * Q + i] = w[i] * initialRho;
+                for (let i = 0; i < Q; i++) {
+                    f[idx * Q + i] = w[i] * initialRho;
+                }
             }
         }
     }
 
     // --- 2. PHYSICS LOOP ---
     function stepLBM() {
-        // Smooth Gyro Inputs
+        // Smooth Gravity Input
         gravityX += (targetGravityX - gravityX) * 0.1;
         gravityY += (targetGravityY - gravityY) * 0.1;
-
-        // Apply Wind (pushes UP in Y direction)
-        // windForce is typically 0.0 to 0.05
-        const totalForceY = gravityY + windForce;
 
         for (let y = 0; y < NY; y++) {
             for (let x = 0; x < NX; x++) {
                 const idx = y * NX + x;
                 
-                let sumRho = 0, sumUx = 0, sumUy = 0;
+                let sumRho = 0;
+                let sumUx = 0;
+                let sumUy = 0;
 
                 for (let i = 0; i < Q; i++) {
                     const fi = f[idx * Q + i];
@@ -171,9 +135,9 @@
 
                 rho[idx] = sumRho;
                 
-                // Add External Forces (Gravity + Wind)
+                // Force Application
                 sumUx += gravityX * sumRho;
-                sumUy += totalForceY * sumRho; // Use combined force
+                sumUy += gravityY * sumRho;
 
                 const localUx = sumUx / sumRho;
                 const localUy = sumUy / sumRho;
@@ -186,6 +150,7 @@
                 for (let i = 0; i < Q; i++) {
                     const cidotU = cx[i] * localUx + cy[i] * localUy;
                     const feq = w[i] * sumRho * (1 + 3 * cidotU + 4.5 * cidotU * cidotU - 1.5 * u2);
+                    // Use dynamic 'omega' here instead of const 'OMEGA'
                     const postCollision = f[idx * Q + i] * (1 - omega) + feq * omega;
 
                     const nextX = x + cx[i];
@@ -199,12 +164,12 @@
                 }
             }
         }
+        
         let temp = f; f = f_new; f_new = temp;
     }
 
     // --- 3. THREE.JS VISUALIZATION ---
     const scene = new THREE.Scene();
-    // scene.background = new THREE.Color(0x000000); // Optional: explicit black
     scene.fog = new THREE.FogExp2(0x111111, 0.015);
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -216,7 +181,7 @@
     renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    // Lights
+    // --- Lighting ---
     const ambientLight = new THREE.AmbientLight(0x404040, 1);
     scene.add(ambientLight);
 
@@ -233,18 +198,20 @@
     dirLight.castShadow = true;
     scene.add(dirLight);
 
-    // --- Mesh Setup ---
+    // --- The Liquid Mesh ---
     const geometry = new THREE.PlaneGeometry(NX, NY, NX - 1, NY - 1);
+    
     const material = new THREE.MeshPhysicalMaterial({ 
-        color: 0x00aaff,
-        metalness: 0.2,
+        color: 0x00aaff, // Starting color (Water Blue)
+        metalness: 0.1,
         roughness: 0.1,
         clearcoat: 1.0,
         clearcoatRoughness: 0.1,
         transmission: 0.2, 
         opacity: 0.9,
         transparent: true,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        flatShading: false
     });
 
     const plane = new THREE.Mesh(geometry, material);
@@ -252,25 +219,17 @@
     plane.receiveShadow = true;
     scene.add(plane);
 
-    // --- Visual Update Logic ---
+    // --- Update Mesh Vertices ---
     function updateVisuals() {
         const positions = plane.geometry.attributes.position.array;
         
         for (let i = 0; i < NX * NY; i++) {
             let d = rho[i];
-            
-            // FIX FOR BACKGROUND RECTANGLE:
-            // We use a threshold. If density is near 1.0 (Air), we set height to -1000.
-            // This pushes the "flat" parts of the mesh far below the camera view, 
-            // effectively hiding the rectangular plate.
-            const threshold = 1.02; 
-            let h = -1000; // Default "Hidden" position
-            
+            const threshold = 1.05;
+            let h = 0;
             if (d > threshold) {
-                // If it's liquid, calculate actual height
                 h = (d - threshold) * 25.0;
             }
-
             positions[i * 3 + 2] = h; 
         }
         
@@ -278,84 +237,111 @@
         plane.geometry.computeVertexNormals();
     }
 
-    // --- 4. INPUT HANDLING ---
-    
-    // Gyroscope
+    // --- 4. INTERACTION (GYRO) ---
     function handleOrientation(event) {
         let x = event.gamma || 0; 
         let y = event.beta || 0;  
+
         const maxTilt = 25; 
         if (x > maxTilt) x = maxTilt; if (x < -maxTilt) x = -maxTilt;
         if (y > maxTilt) y = maxTilt; if (y < -maxTilt) y = -maxTilt;
+
         targetGravityX = (x / maxTilt) * 0.0015;
         targetGravityY = -(y / maxTilt) * 0.0015;
     }
 
-    // Touch/Scroll for Viscosity
+    // --- 5. VISCOSITY INTERACTION (TOUCH/SCROLL) ---
     let isDragging = false;
     let startY = 0;
     let startVisc = 0;
-    const colorWater = new THREE.Color(0x00aaff);
-    const colorHoney = new THREE.Color(0xffaa00);
+
+    // Colors for interpolation
+    const colorWater = new THREE.Color(0x00aaff); // Blue
+    const colorHoney = new THREE.Color(0xffaa00); // Gold/Amber
     const labelEl = document.getElementById('viscosity-label');
 
     function onPointerDown(e) {
         isDragging = true;
+        // Support both mouse and touch coordinates
         startY = e.touches ? e.touches[0].clientY : e.clientY;
         startVisc = viscosity;
     }
 
     function onPointerMove(e) {
         if (!isDragging) return;
+        
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const deltaY = startY - clientY; 
-        let newVisc = startVisc + (deltaY * 0.0005);
+        const deltaY = startY - clientY; // Positive = Drag Up
+        
+        // Sensitivity: How much drag pixel distance changes viscosity
+        const sensitivity = 0.0005; 
+        
+        // Calculate new viscosity based on drag distance
+        let newVisc = startVisc + (deltaY * sensitivity);
+        
+        // Clamp Viscosity: Min 0.02 (Water), Max 0.25 (Thick Honey)
+        // LBM becomes unstable if viscosity is too low (< 0.01)
         newVisc = Math.max(0.02, Math.min(newVisc, 0.25));
+        
         updateViscosity(newVisc);
     }
 
-    function onPointerUp() { isDragging = false; }
+    function onPointerUp() {
+        isDragging = false;
+    }
 
     function updateViscosity(val) {
         viscosity = val;
+        // Update LBM relaxation parameter
         omega = 1.0 / (3.0 * viscosity + 0.5);
-        const t = (viscosity - 0.02) / (0.23); // Normalize 0-1
-        
+
+        // Calculate visual interpolation factor (0.0 to 1.0)
+        // Map [0.02, 0.25] -> [0, 1]
+        const t = (viscosity - 0.02) / (0.25 - 0.02);
+
+        // Update Color
         plane.material.color.lerpColors(colorWater, colorHoney, t);
+        
+        // Update Light Color slightly to match environment
         pLight1.color.lerpColors(new THREE.Color(0x0088ff), new THREE.Color(0xffcc00), t * 0.5);
 
+        // Update Label text
         if (t < 0.2) labelEl.innerText = "WATER";
         else if (t < 0.5) labelEl.innerText = "OIL";
         else if (t < 0.8) labelEl.innerText = "SYRUP";
         else labelEl.innerText = "HONEY";
     }
 
-    // Events
+    // Add Listeners
     window.addEventListener('mousedown', onPointerDown);
     window.addEventListener('mousemove', onPointerMove);
     window.addEventListener('mouseup', onPointerUp);
+    
     window.addEventListener('touchstart', onPointerDown, {passive: false});
     window.addEventListener('touchmove', (e) => { e.preventDefault(); onPointerMove(e); }, {passive: false});
     window.addEventListener('touchend', onPointerUp);
 
-    // --- MAIN LOOP ---
-    async function startApp() {
-        document.getElementById('startBtn').innerText = "Loading...";
-        
-        // 1. Ask for Mic
-        await setupAudio();
-        
-        // 2. Ask for Gyro (iOS 13+)
+
+    // --- APP STARTUP ---
+    function requestAccess() {
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            try {
-                const response = await DeviceOrientationEvent.requestPermission();
-                if (response === 'granted') window.addEventListener('deviceorientation', handleOrientation);
-            } catch (e) { console.error(e); }
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                        startSim();
+                    } else {
+                        alert("Gyroscope permission required for interaction.");
+                    }
+                })
+                .catch(console.error);
         } else {
             window.addEventListener('deviceorientation', handleOrientation);
+            startSim();
         }
+    }
 
-        // 3. Start Sim
+    function startSim() {
         document.getElementById('overlay').style.opacity = '0';
         setTimeout(() => { document.getElementById('overlay').style.display = 'none'; }, 500);
         running = true;
@@ -367,18 +353,7 @@
         requestAnimationFrame(animate);
         if (!running) return;
 
-        // Process Audio Wind
-        const vol = getVolume(); // 0 - 255
-        // Scale volume to LBM force. 
-        // 255 (Max Vol) -> ~0.005 force (strong wind)
-        const windTarget = (vol / 255.0) * 0.005; 
-        // Smooth the wind
-        windForce += (windTarget - windForce) * 0.1;
-
-        // Update UI Bar
-        document.getElementById('mic-bar').style.width = (vol / 2.55) + "%";
-
-        // Physics Steps
+        // 2 physics steps per render frame for fluid stability
         stepLBM();
         stepLBM();
         
@@ -386,7 +361,7 @@
         renderer.render(scene, camera);
     }
 
-    document.getElementById('startBtn').addEventListener('click', startApp);
+    document.getElementById('startBtn').addEventListener('click', requestAccess);
 
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
