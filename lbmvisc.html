@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>LBM Droplet UX</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', sans-serif; user-select: none; }
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.6); color: white; z-index: 10;
+            flex-direction: column; text-align: center; backdrop-filter: blur(5px);
+        }
+        h1 { margin-bottom: 5px; font-weight: 300; letter-spacing: 2px; }
+        p { color: #aaa; font-size: 14px; margin-bottom: 30px; }
+        button {
+            padding: 18px 40px; font-size: 16px; background: white;
+            border: none; border-radius: 30px; color: #000; cursor: pointer; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.1s;
+            font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+        }
+        button:active { transform: scale(0.95); }
+        #hint { 
+            position: absolute; bottom: 30px; width: 100%; text-align: center; 
+            color: rgba(255,255,255,0.3); pointer-events: none; font-size: 12px;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        #viscosity-label {
+            position: absolute; top: 30px; width: 100%; text-align: center;
+            color: rgba(255,255,255,0.8); pointer-events: none; font-size: 16px;
+            font-weight: 300; letter-spacing: 4px; text-transform: uppercase;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            transition: color 0.3s;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<div id="viscosity-label">WATER</div>
+<div id="hint">Tilt to Move • Drag Up/Down to Thicken</div>
+
+<div id="overlay">
+    <div>
+        <h1>LIQUID UX</h1>
+        <p>Interactive Surface Demo</p>
+        <button id="startBtn">Initialize</button>
+    </div>
+</div>
+
+<script>
+    // --- CONFIGURATION ---
+    const NX = 64; 
+    const NY = 64;
+    const Q = 9; 
+    
+    // DYNAMIC VARIABLES (Changed from const to let)
+    // Range: 0.02 (Water) to 0.25 (Thick Honey)
+    let viscosity = 0.02; 
+    let omega = 1.0 / (3.0 * viscosity + 0.5);
+
+    // --- LBM VARIABLES ---
+    const SIZE = NX * NY * Q;
+    let f = new Float32Array(SIZE);
+    let f_new = new Float32Array(SIZE);
+    let rho = new Float32Array(NX * NY); 
+    let ux = new Float32Array(NX * NY);  
+    let uy = new Float32Array(NX * NY);  
+
+    // Weights and Vectors (D2Q9)
+    const w = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
+    const cx = [0, 1, 0, -1, 0, 1, -1, -1, 1];
+    const cy = [0, 0, 1, 0, -1, 1, 1, -1, -1];
+    const opposite = [0, 3, 4, 1, 2, 7, 8, 5, 6]; 
+
+    // Physics State
+    let gravityX = 0.0;
+    let gravityY = 0.0;
+    
+    // Smoothing variables (Lerp)
+    let targetGravityX = 0.0;
+    let targetGravityY = 0.0;
+    let running = false;
+
+    // --- 1. INITIALIZATION ---
+    function initLBM() {
+        for (let y = 0; y < NY; y++) {
+            for (let x = 0; x < NX; x++) {
+                const idx = y * NX + x;
+                
+                // Create a Gaussian Drop in the center
+                const dx = x - NX/2;
+                const dy = y - NY/2;
+                const distSq = dx*dx + dy*dy;
+                
+                // Drop radius approx 10-12 grid units
+                let initialRho = 1.0;
+                if (distSq < 100) {
+                    // Smooth hump
+                    initialRho += 1.5 * Math.exp(-distSq / 50);
+                }
+
+                rho[idx] = initialRho;
+                ux[idx] = 0;
+                uy[idx] = 0;
+
+                for (let i = 0; i < Q; i++) {
+                    f[idx * Q + i] = w[i] * initialRho;
+                }
+            }
+        }
+    }
+
+    // --- 2. PHYSICS LOOP ---
+    function stepLBM() {
+        // Smooth Gravity Input
+        gravityX += (targetGravityX - gravityX) * 0.1;
+        gravityY += (targetGravityY - gravityY) * 0.1;
+
+        for (let y = 0; y < NY; y++) {
+            for (let x = 0; x < NX; x++) {
+                const idx = y * NX + x;
+                
+                let sumRho = 0;
+                let sumUx = 0;
+                let sumUy = 0;
+
+                for (let i = 0; i < Q; i++) {
+                    const fi = f[idx * Q + i];
+                    sumRho += fi;
+                    sumUx += fi * cx[i];
+                    sumUy += fi * cy[i];
+                }
+
+                rho[idx] = sumRho;
+                
+                // Force Application
+                sumUx += gravityX * sumRho;
+                sumUy += gravityY * sumRho;
+
+                const localUx = sumUx / sumRho;
+                const localUy = sumUy / sumRho;
+
+                ux[idx] = localUx;
+                uy[idx] = localUy;
+
+                const u2 = localUx * localUx + localUy * localUy;
+
+                for (let i = 0; i < Q; i++) {
+                    const cidotU = cx[i] * localUx + cy[i] * localUy;
+                    const feq = w[i] * sumRho * (1 + 3 * cidotU + 4.5 * cidotU * cidotU - 1.5 * u2);
+                    // Use dynamic 'omega' here instead of const 'OMEGA'
+                    const postCollision = f[idx * Q + i] * (1 - omega) + feq * omega;
+
+                    const nextX = x + cx[i];
+                    const nextY = y + cy[i];
+
+                    if (nextX >= 0 && nextX < NX && nextY >= 0 && nextY < NY) {
+                        f_new[(nextY * NX + nextX) * Q + i] = postCollision;
+                    } else {
+                        f_new[idx * Q + opposite[i]] = postCollision;
+                    }
+                }
+            }
+        }
+        
+        let temp = f; f = f_new; f_new = temp;
+    }
+
+    // --- 3. THREE.JS VISUALIZATION ---
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x111111, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, -60, 60);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // --- Lighting ---
+    const ambientLight = new THREE.AmbientLight(0x404040, 1);
+    scene.add(ambientLight);
+
+    const pLight1 = new THREE.PointLight(0x0088ff, 2, 100);
+    pLight1.position.set(20, 20, 30);
+    scene.add(pLight1);
+
+    const pLight2 = new THREE.PointLight(0xffffff, 1, 100);
+    pLight2.position.set(-20, -20, 30);
+    scene.add(pLight2);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    dirLight.position.set(0, -50, 100);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    // --- The Liquid Mesh ---
+    const geometry = new THREE.PlaneGeometry(NX, NY, NX - 1, NY - 1);
+    
+    const material = new THREE.MeshPhysicalMaterial({ 
+        color: 0x00aaff, // Starting color (Water Blue)
+        metalness: 0.1,
+        roughness: 0.1,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.1,
+        transmission: 0.2, 
+        opacity: 0.9,
+        transparent: true,
+        side: THREE.DoubleSide,
+        flatShading: false
+    });
+
+    const plane = new THREE.Mesh(geometry, material);
+    plane.castShadow = true;
+    plane.receiveShadow = true;
+    scene.add(plane);
+
+    // --- Update Mesh Vertices ---
+    function updateVisuals() {
+        const positions = plane.geometry.attributes.position.array;
+        
+        for (let i = 0; i < NX * NY; i++) {
+            let d = rho[i];
+            const threshold = 1.05;
+            let h = 0;
+            if (d > threshold) {
+                h = (d - threshold) * 25.0;
+            }
+            positions[i * 3 + 2] = h; 
+        }
+        
+        plane.geometry.attributes.position.needsUpdate = true;
+        plane.geometry.computeVertexNormals();
+    }
+
+    // --- 4. INTERACTION (GYRO) ---
+    function handleOrientation(event) {
+        let x = event.gamma || 0; 
+        let y = event.beta || 0;  
+
+        const maxTilt = 25; 
+        if (x > maxTilt) x = maxTilt; if (x < -maxTilt) x = -maxTilt;
+        if (y > maxTilt) y = maxTilt; if (y < -maxTilt) y = -maxTilt;
+
+        targetGravityX = (x / maxTilt) * 0.0015;
+        targetGravityY = -(y / maxTilt) * 0.0015;
+    }
+
+    // --- 5. VISCOSITY INTERACTION (TOUCH/SCROLL) ---
+    let isDragging = false;
+    let startY = 0;
+    let startVisc = 0;
+
+    // Colors for interpolation
+    const colorWater = new THREE.Color(0x00aaff); // Blue
+    const colorHoney = new THREE.Color(0xffaa00); // Gold/Amber
+    const labelEl = document.getElementById('viscosity-label');
+
+    function onPointerDown(e) {
+        isDragging = true;
+        // Support both mouse and touch coordinates
+        startY = e.touches ? e.touches[0].clientY : e.clientY;
+        startVisc = viscosity;
+    }
+
+    function onPointerMove(e) {
+        if (!isDragging) return;
+        
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const deltaY = startY - clientY; // Positive = Drag Up
+        
+        // Sensitivity: How much drag pixel distance changes viscosity
+        const sensitivity = 0.0005; 
+        
+        // Calculate new viscosity based on drag distance
+        let newVisc = startVisc + (deltaY * sensitivity);
+        
+        // Clamp Viscosity: Min 0.02 (Water), Max 0.25 (Thick Honey)
+        // LBM becomes unstable if viscosity is too low (< 0.01)
+        newVisc = Math.max(0.02, Math.min(newVisc, 0.25));
+        
+        updateViscosity(newVisc);
+    }
+
+    function onPointerUp() {
+        isDragging = false;
+    }
+
+    function updateViscosity(val) {
+        viscosity = val;
+        // Update LBM relaxation parameter
+        omega = 1.0 / (3.0 * viscosity + 0.5);
+
+        // Calculate visual interpolation factor (0.0 to 1.0)
+        // Map [0.02, 0.25] -> [0, 1]
+        const t = (viscosity - 0.02) / (0.25 - 0.02);
+
+        // Update Color
+        plane.material.color.lerpColors(colorWater, colorHoney, t);
+        
+        // Update Light Color slightly to match environment
+        pLight1.color.lerpColors(new THREE.Color(0x0088ff), new THREE.Color(0xffcc00), t * 0.5);
+
+        // Update Label text
+        if (t < 0.2) labelEl.innerText = "WATER";
+        else if (t < 0.5) labelEl.innerText = "OIL";
+        else if (t < 0.8) labelEl.innerText = "SYRUP";
+        else labelEl.innerText = "HONEY";
+    }
+
+    // Add Listeners
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+    
+    window.addEventListener('touchstart', onPointerDown, {passive: false});
+    window.addEventListener('touchmove', (e) => { e.preventDefault(); onPointerMove(e); }, {passive: false});
+    window.addEventListener('touchend', onPointerUp);
+
+
+    // --- APP STARTUP ---
+    function requestAccess() {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                        startSim();
+                    } else {
+                        alert("Gyroscope permission required for interaction.");
+                    }
+                })
+                .catch(console.error);
+        } else {
+            window.addEventListener('deviceorientation', handleOrientation);
+            startSim();
+        }
+    }
+
+    function startSim() {
+        document.getElementById('overlay').style.opacity = '0';
+        setTimeout(() => { document.getElementById('overlay').style.display = 'none'; }, 500);
+        running = true;
+        initLBM();
+        animate();
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        if (!running) return;
+
+        // 2 physics steps per render frame for fluid stability
+        stepLBM();
+        stepLBM();
+        
+        updateVisuals();
+        renderer.render(scene, camera);
+    }
+
+    document.getElementById('startBtn').addEventListener('click', requestAccess);
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
