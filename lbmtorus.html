@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Liquid Torus</title>
+    <title>Perturbed Liquid Torus</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; user-select: none; }
         #overlay {
@@ -39,12 +39,12 @@
 <body>
 
 <div id="viscosity-label">WATER</div>
-<div id="hint">Tilt to Deform & Flow • Drag to Thicken</div>
+<div id="hint">Move to Splash • Tilt to Warp • Drag to Thicken</div>
 
 <div id="overlay">
     <div>
         <h1>LIQUID TORUS</h1>
-        <p>Viscous Surface Simulation</p>
+        <p>Motion Perturbation Demo</p>
         <button id="startBtn">Start</button>
     </div>
 </div>
@@ -75,20 +75,21 @@
     const cy = [0, 0, 1, 0, -1, 1, 1, -1, -1];
     const opposite = [0, 3, 4, 1, 2, 7, 8, 5, 6]; 
 
-    // Forces from Gyro
+    // Physics Inputs
     let forceX = 0.0;
     let forceY = 0.0;
-    let tiltX = 0.0; // Used for deformation
+    let tiltX = 0.0; // Deforms geometry
     let tiltY = 0.0;
+    let shakeEnergy = 0.0; // Random perturbations
 
     // --- 1. INITIALIZATION ---
     function initLBM() {
         for (let y = 0; y < NY; y++) {
             for (let x = 0; x < NX; x++) {
                 const idx = y * NX + x;
-                // Add some initial turbulence/blobs
                 let initialRho = 1.0;
-                if (Math.random() > 0.95) initialRho += 2.5; 
+                // Tiny noise to start
+                if (Math.random() > 0.99) initialRho += 0.5; 
                 rho[idx] = initialRho;
                 for (let i = 0; i < Q; i++) f[idx * Q + i] = w[i] * initialRho;
             }
@@ -97,6 +98,13 @@
 
     // --- 2. PHYSICS LOOP (Periodic) ---
     function stepLBM() {
+        
+        // Dampen the shake energy over time
+        shakeEnergy *= 0.9;
+        // Dampen forces (friction)
+        forceX *= 0.95;
+        forceY *= 0.95;
+
         for (let y = 0; y < NY; y++) {
             for (let x = 0; x < NX; x++) {
                 const idx = y * NX + x;
@@ -112,9 +120,15 @@
                     sumUy += fi * cy[i];
                 }
 
+                // --- PERTURBATION LOGIC ---
+                // If shaking, inject random density noise to create ripples
+                if (shakeEnergy > 0.01 && Math.random() < 0.01) {
+                    sumRho += (Math.random() - 0.5) * shakeEnergy * 5.0;
+                }
+
                 rho[idx] = sumRho;
                 
-                // Add gravity/flow forces based on Tilt
+                // Add External Motion Forces (Inertia)
                 sumUx += forceX * sumRho;
                 sumUy += forceY * sumRho;
 
@@ -162,10 +176,7 @@
     pLight2.position.set(-50, -50, 50);
     scene.add(pLight2);
 
-    // --- Liquid Mesh ---
-    // Note: NX and NY match the LBM grid. 
-    // We add 1 to vertices count to close the loop smoothly in ThreeJS logic, 
-    // but we map the UVs to wrap perfectly.
+    // --- Mesh ---
     const geometry = new THREE.PlaneGeometry(1, 1, NX, NY);
     
     const material = new THREE.MeshPhysicalMaterial({ 
@@ -189,17 +200,13 @@
     // --- MAPPING LBM TO TORUS GEOMETRY ---
     function updateTorusGeometry() {
         const positions = torusMesh.geometry.attributes.position.array;
-        const vertexCount = (NX + 1) * (NY + 1);
 
-        // Deform Torus based on Tilt
-        // X Tilt makes it wider/thinner
-        // Y Tilt stretches it vertically
+        // Deform Torus based on TILT (Orientation)
         const currentMajor = majorRadius + (tiltX * 0.2); 
         const currentMinor = minorRadius + (tiltY * 0.1);
 
         for (let j = 0; j <= NY; j++) {
             for (let i = 0; i <= NX; i++) {
-                // Map mesh index to LBM grid index (wrapping)
                 const gridX = i % NX;
                 const gridY = j % NY;
                 const lbmIdx = gridY * NX + gridX;
@@ -207,17 +214,15 @@
                 const d = rho[lbmIdx];
 
                 // Add "Liquid Height" to the minor radius
-                // Thresholding to make it look like droplets/waves on surface
                 let h = 0;
                 if (d > 1.05) h = (d - 1.05) * 8.0; 
 
-                // Angles
                 const u = (i / NX) * Math.PI * 2;
                 const v = (j / NY) * Math.PI * 2;
 
-                const r = currentMinor + h; // Radius of tube at this point
+                const r = currentMinor + h; 
 
-                // Torus Parametric Formula
+                // Parametric Torus
                 const x = (currentMajor + r * Math.cos(v)) * Math.cos(u);
                 const y = (currentMajor + r * Math.cos(v)) * Math.sin(u);
                 const z = r * Math.sin(v);
@@ -234,24 +239,44 @@
     }
 
     // --- 4. INPUT HANDLING ---
+    
+    // A. TILT (Orientation) -> Deforms the Geometry
     function handleOrientation(event) {
         let x = event.gamma || 0; 
         let y = event.beta || 0;  
 
-        // Clamp
         if (x > 45) x = 45; if (x < -45) x = -45;
         if (y > 45) y = 45; if (y < -45) y = -45;
 
-        // 1. Fluid Flow Forces (Gentle push)
-        forceX = (x / 45) * 0.002;
-        forceY = -(y / 45) * 0.002;
-
-        // 2. Geometry Deformation (Visual Squeeze)
         tiltX = x;
         tiltY = y;
     }
 
-    // --- Viscosity Control (Color + Thickness) ---
+    // B. MOTION (Acceleration) -> Perturbs the Liquid
+    function handleMotion(event) {
+        // accelerationIncludingGravity gives us the raw physics impulse
+        const acc = event.accelerationIncludingGravity;
+        if (!acc) return;
+
+        // X/Y Acceleration drives the fluid flow directly (Inertia)
+        // We use a small multiplier to inject this into LBM velocity
+        forceX += (acc.x || 0) * 0.0005;
+        forceY += (acc.y || 0) * 0.0005;
+
+        // Calculate "Jerk" or Shake magnitude to create turbulence
+        // We use acceleration without gravity if available for pure shake
+        const shakeAcc = event.acceleration || acc;
+        const magnitude = Math.sqrt(shakeAcc.x**2 + shakeAcc.y**2 + shakeAcc.z**2);
+        
+        // If shaking hard, add energy
+        if (magnitude > 3.0) {
+            shakeEnergy += magnitude * 0.01;
+            // Cap shake energy
+            if (shakeEnergy > 1.0) shakeEnergy = 1.0;
+        }
+    }
+
+    // --- Viscosity Control ---
     let isDragging = false;
     let startY = 0;
     let startVisc = 0;
@@ -281,13 +306,9 @@
         omega = 1.0 / (3.0 * viscosity + 0.5);
         const t = (viscosity - 0.02) / (0.23); 
 
-        // Update Color
         torusMesh.material.color.lerpColors(colorWater, colorHoney, t);
-        
-        // Update Light for atmosphere
         pLight1.color.lerpColors(new THREE.Color(0x0088ff), new THREE.Color(0xffcc00), t * 0.5);
 
-        // Labels
         if (t < 0.2) labelEl.innerText = "WATER";
         else if (t < 0.5) labelEl.innerText = "OIL";
         else if (t < 0.8) labelEl.innerText = "SYRUP";
@@ -305,19 +326,24 @@
     // --- APP LOOP ---
     function requestAccess() {
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            DeviceOrientationEvent.requestPermission()
-                .then(response => {
-                    if (response === 'granted') {
-                        window.addEventListener('deviceorientation', handleOrientation);
-                        startSim();
-                    } else {
-                        alert("Gyro required for deformation.");
-                        startSim();
-                    }
-                })
-                .catch(() => startSim());
+            // Requesting access for both Orientation and Motion
+            Promise.all([
+                DeviceOrientationEvent.requestPermission(),
+                DeviceMotionEvent.requestPermission()
+            ]).then(responses => {
+                if (responses.every(r => r === 'granted')) {
+                    window.addEventListener('deviceorientation', handleOrientation);
+                    window.addEventListener('devicemotion', handleMotion);
+                    startSim();
+                } else {
+                    alert("Sensors required for full effect.");
+                    startSim();
+                }
+            }).catch(console.error);
         } else {
+            // Non-iOS or older devices
             window.addEventListener('deviceorientation', handleOrientation);
+            window.addEventListener('devicemotion', handleMotion);
             startSim();
         }
     }
@@ -335,7 +361,7 @@
         if (!running) return;
 
         stepLBM();
-        stepLBM(); // Double step for speed
+        stepLBM(); 
         
         updateTorusGeometry();
         renderer.render(scene, camera);
