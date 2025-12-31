@@ -2,74 +2,88 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Ballerburg Science: Wurfparabel & Daten</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ballerburg Science: Mobile & Responsive</title>
     <style>
         body {
-            font-family: 'Segoe UI', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #2c3e50;
             color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
             margin: 0;
-            padding: 20px;
-            height: 100vh;
+            padding: 10px;
             box-sizing: border-box;
-            overflow: hidden;
+            /* Verhindert "Pull-to-refresh" auf Mobile beim Spielen */
+            overscroll-behavior: none; 
         }
 
-        h1 { margin: 0 0 10px 0; font-size: 24px; }
+        h1 {
+            text-align: center;
+            margin: 0 0 10px 0;
+            font-size: clamp(1.2rem, 4vw, 2rem); /* Schriftgröße passt sich an */
+        }
 
-        /* HAUPT LAYOUT */
+        /* HAUPT CONTAINER */
         #main-container {
             display: flex;
             flex-direction: column;
-            width: 1000px;
-            max-width: 95vw;
-            height: 90vh;
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
             gap: 15px;
         }
 
-        /* SPIEL BEREICH (OBEN) */
+        /* OBEN: SPIEL BEREICH */
         #game-section {
             position: relative;
-            flex: 2; /* Nimmt 2/3 des Platzes */
-            border: 4px solid #34495e;
+            width: 100%;
+            /* Verhältnis 2:1 erzwingen (Breite:Höhe) */
+            aspect-ratio: 2 / 1; 
+            border: 2px solid #34495e;
             background: #000;
             border-radius: 8px;
             overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
 
         canvas#gameCanvas {
             width: 100%;
             height: 100%;
             display: block;
-            cursor: crosshair;
+            touch-action: none; /* WICHTIG: Verhindert Scrollen beim Zielen */
         }
 
-        /* DASHBOARD BEREICH (UNTEN) */
+        /* UNTEN: DASHBOARD BEREICH */
         #dashboard-section {
-            flex: 1; /* Nimmt 1/3 des Platzes */
             display: flex;
-            gap: 15px;
-            min-height: 200px;
+            flex-wrap: wrap; /* Umbruch auf kleinen Screens */
+            gap: 10px;
+            width: 100%;
         }
 
         .panel {
             background: rgba(0, 0, 0, 0.3);
             border-radius: 8px;
             padding: 10px;
-            border: 1px solid #7f8c8d;
-        }
-
-        /* DIAGRAMM */
-        #chart-panel {
-            flex: 2;
-            position: relative;
+            border: 1px solid #555;
             display: flex;
             flex-direction: column;
         }
-        
+
+        /* Linkes Panel: Chart */
+        #chart-panel {
+            flex: 2; /* Nimmt mehr Platz auf Desktop */
+            min-width: 300px; /* Mindestbreite bevor Umbruch */
+            height: 250px;
+            position: relative;
+        }
+
+        /* Rechtes Panel: Daten */
+        #data-panel {
+            flex: 1;
+            min-width: 250px;
+            height: 250px;
+        }
+
         canvas#chartCanvas {
             width: 100%;
             height: 100%;
@@ -77,17 +91,17 @@
             border-radius: 4px;
         }
 
-        /* TABELLE & CONTROLS */
-        #data-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
+        /* LOG / TABELLE */
         .data-header {
             display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;
         }
+        
+        button {
+            background: #27ae60; border: none; color: white; padding: 8px 12px;
+            cursor: pointer; border-radius: 4px; font-weight: bold; font-size: 14px;
+        }
+        /* Größere Buttons für Touch */
+        button:active { transform: scale(0.95); }
 
         #log-container {
             flex-grow: 1;
@@ -96,41 +110,49 @@
             font-family: monospace;
             font-size: 12px;
             padding: 5px;
+            -webkit-overflow-scrolling: touch; /* Weiches Scrollen auf iOS */
         }
 
-        .log-entry { margin-bottom: 2px; border-bottom: 1px solid #555; display: flex; justify-content: space-between; }
-        .log-entry span { margin-right: 10px; }
+        .log-entry { 
+            margin-bottom: 4px; padding-bottom: 4px;
+            border-bottom: 1px solid #555; 
+            display: flex; justify-content: space-between; 
+        }
 
-        /* UI OVERLAY IM SPIEL */
+        /* IN-GAME UI OVERLAY */
         #ui-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; padding: 10px; box-sizing: border-box;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+
+        .hud-top {
             display: flex; justify-content: space-between; align-items: flex-start;
+            width: 100%;
         }
 
         .hud-box {
-            background: rgba(0, 0, 0, 0.7);
-            padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 14px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 14px;
             pointer-events: auto; display: flex; align-items: center; gap: 8px; color: white;
+            backdrop-filter: blur(2px);
         }
 
-        .turn-msg {
-            position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
-            font-size: 24px; font-weight: bold; text-shadow: 2px 2px 0 black;
+        .status-msg {
+            position: absolute; top: 20%; width: 100%; text-align: center;
+            font-size: clamp(1.5rem, 5vw, 2.5rem); font-weight: 900; 
+            text-shadow: 2px 2px 0 black, -1px -1px 0 black;
+            pointer-events: none;
         }
 
-        button {
-            background: #27ae60; border: none; color: white; padding: 5px 10px;
-            cursor: pointer; border-radius: 4px; font-weight: bold; font-size: 12px;
-        }
-        button:hover { background: #2ecc71; }
-        button#reset-btn { background: #e67e22; }
+        /* Checkbox größer für Finger */
+        input[type="checkbox"] { transform: scale(1.3); margin-right: 5px; }
 
     </style>
 </head>
 <body>
 
-    <h1>Physik Labor: Die Wurfparabel</h1>
+    <h1>🏰 Physik Labor: Wurfparabel</h1>
 
     <div id="main-container">
         
@@ -138,80 +160,79 @@
             <canvas id="gameCanvas" width="1000" height="500"></canvas>
             
             <div id="ui-overlay">
-                <div class="hud-box">
-                    <input type="checkbox" id="windCheck"> <label for="windCheck">Wind aktivieren</label>
+                <div class="hud-top">
+                    <div class="hud-box">
+                        <input type="checkbox" id="windCheck"> <label for="windCheck">Wind</label>
+                    </div>
+                    <div class="hud-box">
+                        <span id="windDisplay">Wind: 0</span>
+                    </div>
                 </div>
-                <div class="turn-msg" id="statusText">Blau ist dran</div>
-                <div class="hud-box">
-                    <span id="windDisplay">Wind: 0</span>
-                    <div style="width:1px; height:15px; background:#555; margin:0 5px;"></div>
-                    <button id="reset-btn">Spiel Neustart</button>
+                
+                <div class="status-msg" id="statusText">Lade Spiel...</div>
+
+                <div style="display:flex; justify-content: flex-end;">
+                    <button id="reset-btn" style="background:#e67e22; pointer-events:auto;">Neustart</button>
                 </div>
             </div>
         </div>
 
         <div id="dashboard-section">
-            
             <div id="chart-panel" class="panel">
                 <div style="position:absolute; top:5px; left:10px; color:#2c3e50; font-weight:bold; font-size:12px;">
-                    Diagramm: Winkel (X) vs. Weite (Y)
+                    Streudiagramm: Winkel (X) vs. Weite (Y)
                 </div>
-                <canvas id="chartCanvas" width="600" height="200"></canvas>
+                <canvas id="chartCanvas" width="600" height="250"></canvas>
             </div>
 
             <div id="data-panel" class="panel">
                 <div class="data-header">
-                    <strong>Messwerte</strong>
-                    <button onclick="exportCSV()">💾 CSV Export</button>
+                    <strong>Wertetabelle</strong>
+                    <button onclick="exportCSV()" style="padding:4px 8px; font-size:12px;">💾 CSV</button>
                 </div>
-                <div id="log-container">
-                    </div>
+                <div id="log-container">Warte auf ersten Schuss...</div>
             </div>
-
         </div>
     </div>
 
 <script>
 window.addEventListener('load', function() {
-    // --- CANVAS REFERENZEN ---
+    // --- SETUP ---
     const gameCanvas = document.getElementById('gameCanvas');
     const ctx = gameCanvas.getContext('2d');
-    
     const chartCanvas = document.getElementById('chartCanvas');
     const ctxChart = chartCanvas.getContext('2d');
 
-    // --- UI REFERENZEN ---
+    // UI Refs
     const uiStatus = document.getElementById('statusText');
     const uiWind = document.getElementById('windDisplay');
     const uiLog = document.getElementById('log-container');
     const checkWind = document.getElementById('windCheck');
     const btnReset = document.getElementById('reset-btn');
 
-    // --- KONSTANTEN ---
+    // Konstanten
     const GROUND_Y = 450;
     const GRAVITY = 0.25;
     const POWER_SCALE = 0.18; 
     const WIND_SCALE = 0.06;
     const MAX_DRAG_DIST = 250;
 
-    // --- STATE ---
-    let shotHistory = []; // Speichert alle Schüsse für Export und Chart
-
+    // State
+    let shotHistory = [];
     let game = {
         turn: 1,
         wind: 0,
-        windEnabled: false, // Standardmäßig aus für bessere Physik-Demo
+        windEnabled: false,
         isAnimating: false,
         isAiming: false,
         aimVector: { x: 0, y: 0, power: 0, angle: 0 },
         ball: null,
         particles: [],
         players: [],
-        obstacle: { x: 450, y: GROUND_Y - 150, w: 100, h: 150, color: '#7f8c8d' }, // Berg in der Mitte
+        obstacle: { x: 450, y: GROUND_Y - 150, w: 100, h: 150, color: '#7f8c8d' },
         trajectoryPoints: []
     };
 
-    // --- INIT ---
     function init() {
         game.players = [
             { id: 1, x: 50, y: GROUND_Y - 60, w: 60, h: 60, hp: 100, color: '#3498db', name: "BLAU" },
@@ -221,13 +242,10 @@ window.addEventListener('load', function() {
         game.particles = [];
         game.isAnimating = false;
         game.turn = 1;
-        game.shotStartPos = null; // Um Weite zu messen
         
-        // Wind reset
         if(game.windEnabled) randomizeWind(); else game.wind = 0;
-        
         updateUI();
-        drawChart(); // Leeres Chart zeichnen
+        drawChart();
         requestAnimationFrame(loop);
     }
 
@@ -239,7 +257,6 @@ window.addEventListener('load', function() {
     }
 
     function update() {
-        // BALL PHYSIK
         if (game.ball) {
             game.ball.vy += GRAVITY;
             game.ball.vx += game.wind * WIND_SCALE;
@@ -247,40 +264,27 @@ window.addEventListener('load', function() {
             game.ball.y += game.ball.vy;
 
             let hit = false;
-            let finalX = game.ball.x;
+            let finalX = game.ball.x; // Trefferposition speichern
             
-            // Boden
-            if (game.ball.y >= GROUND_Y) { 
-                createExplosion(game.ball.x, GROUND_Y, "#27ae60"); 
-                hit = true; 
-            }
-            // Berg
-            else if (checkRectCollide(game.ball.x, game.ball.y, game.obstacle)) { 
-                createExplosion(game.ball.x, game.ball.y, game.obstacle.color); 
-                hit = true; 
-            }
-            // Aus
-            else if (game.ball.x < -100 || game.ball.x > gameCanvas.width + 100) { 
-                hit = true; 
-            }
-            // Gegner
+            // Kollisionsprüfungen
+            if (game.ball.y >= GROUND_Y) { createExplosion(game.ball.x, GROUND_Y, "#27ae60"); hit = true; }
+            else if (checkRectCollide(game.ball.x, game.ball.y, game.obstacle)) { createExplosion(game.ball.x, game.ball.y, game.obstacle.color); hit = true; }
+            else if (game.ball.x < -100 || game.ball.x > gameCanvas.width + 100) { hit = true; }
             else {
                 let enemy = game.players[game.turn === 1 ? 1 : 0];
                 if (checkRectCollide(game.ball.x, game.ball.y, enemy)) {
                     enemy.hp -= 35;
                     createExplosion(game.ball.x, game.ball.y, enemy.color);
                     hit = true;
-                    if (enemy.hp <= 0) setTimeout(() => { alert(game.players[game.turn-1].name + " GEWINNT!"); init(); shotHistory=[]; uiLog.innerHTML=""; }, 100);
+                    if (enemy.hp <= 0) setTimeout(() => { alert(game.players[game.turn-1].name + " GEWINNT!"); init(); shotHistory=[]; uiLog.innerHTML=""; drawChart(); }, 100);
                 }
             }
 
             if (hit) {
-                // DATENERFASSUNG
                 recordShot(finalX);
                 endTurn();
             }
         }
-
         // Partikel
         for (let i = game.particles.length - 1; i >= 0; i--) {
             let p = game.particles[i];
@@ -290,181 +294,179 @@ window.addEventListener('load', function() {
     }
 
     function draw() {
-        // HIMMEL
+        // Clear
         const grad = ctx.createLinearGradient(0, 0, 0, 500);
         grad.addColorStop(0, "#87CEEB"); grad.addColorStop(1, "#E0F6FF");
         ctx.fillStyle = grad; ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
 
-        // HINDERNIS
-        ctx.fillStyle = game.obstacle.color; 
-        ctx.fillRect(game.obstacle.x, game.obstacle.y, game.obstacle.w, game.obstacle.h);
-        
-        // BODEN
+        // Objekte
+        ctx.fillStyle = game.obstacle.color; ctx.fillRect(game.obstacle.x, game.obstacle.y, game.obstacle.w, game.obstacle.h);
         ctx.fillStyle = "#27ae60"; ctx.fillRect(0, GROUND_Y, gameCanvas.width, gameCanvas.height - GROUND_Y);
 
-        // BURGEN
         game.players.forEach(p => {
             if (p.hp > 0) {
                 ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.w, p.h);
-                // HP
-                ctx.fillStyle = "black"; ctx.fillRect(p.x, p.y - 20, p.w, 5);
-                ctx.fillStyle = "lime"; ctx.fillRect(p.x, p.y - 20, p.w * (p.hp/100), 5);
+                // HP Bar
+                ctx.fillStyle = "black"; ctx.fillRect(p.x, p.y - 20, p.w, 6);
+                ctx.fillStyle = (p.hp>50) ? "#2ecc71" : "#e74c3c"; ctx.fillRect(p.x+1, p.y - 19, (p.w-2) * (p.hp/100), 4);
             }
         });
 
-        // HILFSLINIEN (AIMING)
+        // Aiming
         if (game.isAiming && !game.isAnimating) {
             drawAimLine();
             drawTrajectory();
         }
 
-        // BALL
+        // Ball
         if (game.ball) {
-            ctx.fillStyle = "#2c3e50"; ctx.beginPath();
-            ctx.arc(game.ball.x, game.ball.y, 6, 0, Math.PI*2); ctx.fill();
-            // Schweif
-            ctx.strokeStyle = "white"; ctx.beginPath(); ctx.moveTo(game.ball.x - game.ball.vx*3, game.ball.y - game.ball.vy*3); ctx.lineTo(game.ball.x, game.ball.y); ctx.stroke();
+            ctx.fillStyle = "#2c3e50"; ctx.beginPath(); ctx.arc(game.ball.x, game.ball.y, 6, 0, Math.PI*2); ctx.fill();
         }
         
-        // PARTIKEL
-        game.particles.forEach(p => {
-            ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
-        });
+        // Partikel
+        game.particles.forEach(p => { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill(); });
     }
 
-    // --- DATEN & CHART ---
-
+    // --- DATA RECORDER ---
     function recordShot(finalX) {
-        // Berechnung der Distanz
-        // Wir nehmen die Distanz vom Abschusspunkt
         let activeP = game.players[game.turn - 1];
         let startX = activeP.x + activeP.w/2;
         let distance = Math.abs(finalX - startX);
-
-        // Winkel normalisieren (immer positiv 0-90)
         let angle = Math.round(game.aimVector.angle);
-        if (game.turn === 2) angle = 180 - angle; // S2 zielt nach links, wir wollen aber den Steigungswinkel
+        if (game.turn === 2) angle = 180 - angle;
         angle = Math.abs(angle);
-
         let power = Math.round((game.aimVector.power / MAX_DRAG_DIST) * 100);
 
         let dataPoint = {
             id: shotHistory.length + 1,
-            player: activeP.name,
+            player: activeP.name.charAt(0), // B oder R
             color: activeP.color,
             angle: angle,
             power: power,
-            distance: Math.round(distance),
-            wind: game.wind.toFixed(2)
+            distance: Math.round(distance)
         };
-
         shotHistory.push(dataPoint);
-        addLogEntry(dataPoint);
+        
+        // Log Update
+        let row = document.createElement('div');
+        row.className = 'log-entry';
+        row.style.borderLeft = `4px solid ${dataPoint.color}`;
+        row.style.paddingLeft = "5px";
+        row.innerHTML = `<span>#${dataPoint.id}</span> <span>${dataPoint.angle}°</span> <span>${dataPoint.power}%</span> <span>-> ${dataPoint.distance}px</span>`;
+        if(uiLog.innerHTML.includes("Warte")) uiLog.innerHTML = "";
+        uiLog.prepend(row);
+        
         drawChart();
     }
 
-    function addLogEntry(d) {
-        let div = document.createElement('div');
-        div.className = 'log-entry';
-        div.style.color = d.color;
-        div.innerHTML = `<span>#${d.id}</span> <span>${d.angle}°</span> <span>${d.power}% Kraft</span> <span>-> ${d.distance}m</span>`;
-        uiLog.prepend(div); // Neues oben
-    }
-
-    // --- CHART ZEICHNEN (CANVAS) ---
+    // --- CHART ---
     function drawChart() {
         const w = chartCanvas.width;
         const h = chartCanvas.height;
-        ctxChart.clearRect(0,0,w,h);
-
-        // Achsen (Abstände)
-        const pad = 30;
+        // High DPI Support für Chart
+        chartCanvas.width = chartCanvas.clientWidth * 2;
+        chartCanvas.height = chartCanvas.clientHeight * 2;
+        ctxChart.scale(2, 2);
         
-        // Gitter zeichnen
-        ctxChart.strokeStyle = "#bdc3c7";
-        ctxChart.lineWidth = 1;
-        ctxChart.beginPath();
-        // Y-Achse
-        ctxChart.moveTo(pad, pad); ctxChart.lineTo(pad, h-pad);
-        // X-Achse
-        ctxChart.moveTo(pad, h-pad); ctxChart.lineTo(w-pad, h-pad);
+        // Reset scale for drawing
+        const dw = chartCanvas.clientWidth;
+        const dh = chartCanvas.clientHeight;
+        
+        ctxChart.clearRect(0,0,dw,dh);
+        const pad = 30;
+
+        // Grid
+        ctxChart.strokeStyle = "#95a5a6"; ctxChart.lineWidth = 1; ctxChart.beginPath();
+        ctxChart.moveTo(pad, pad); ctxChart.lineTo(pad, dh-pad); // Y
+        ctxChart.moveTo(pad, dh-pad); ctxChart.lineTo(dw-pad, dh-pad); // X
         ctxChart.stroke();
 
-        // Labels
-        ctxChart.fillStyle = "#2c3e50";
-        ctxChart.font = "10px Arial";
-        ctxChart.fillText("0m", 5, h-pad);
-        ctxChart.fillText("Weite (Y)", 5, pad - 5);
-        ctxChart.fillText("Winkel (X)", w - 50, h - 10);
-        
-        // X-Achse Markierungen (0° bis 90°)
+        ctxChart.fillStyle = "#34495e"; ctxChart.font = "10px sans-serif";
+        ctxChart.fillText("Weite", 2, pad-5); ctxChart.fillText("Winkel (°)", dw-50, dh-5);
+
         for(let deg=0; deg<=90; deg+=15) {
-            let x = pad + (deg / 90) * (w - 2*pad);
-            ctxChart.fillText(deg+"°", x-5, h-10);
-            ctxChart.fillRect(x, h-pad-2, 1, 4); // Tick
+            let x = pad + (deg/90)*(dw-2*pad);
+            ctxChart.fillText(deg, x-5, dh-10);
+            ctxChart.fillRect(x, dh-pad-2, 1, 4);
         }
 
-        // DATEN PUNKTE
         if (shotHistory.length === 0) return;
-
-        // Skalierung Y-Achse: Wir suchen die max Weite
-        let maxDist = Math.max(...shotHistory.map(s => s.distance), 800); // Min 800 width
+        let maxDist = Math.max(...shotHistory.map(s => s.distance), 900);
 
         shotHistory.forEach(s => {
-            // X-Koordinate: Winkel (0-90)
-            let px = pad + (s.angle / 90) * (w - 2*pad);
-            
-            // Y-Koordinate: Weite
-            // 0 ist unten (h-pad), maxDist ist oben (pad)
-            let py = (h - pad) - (s.distance / maxDist) * (h - 2*pad);
-
-            // Punkt malen
-            ctxChart.fillStyle = s.color;
-            ctxChart.beginPath();
-            ctxChart.arc(px, py, 4, 0, Math.PI*2);
-            ctxChart.fill();
-            
-            // Umrandung für bessere Sichtbarkeit
-            ctxChart.strokeStyle = "black";
-            ctxChart.lineWidth = 1;
-            ctxChart.stroke();
+            let px = pad + (s.angle / 90) * (dw - 2*pad);
+            let py = (dh - pad) - (s.distance / maxDist) * (dh - 2*pad);
+            ctxChart.fillStyle = s.color; ctxChart.beginPath(); ctxChart.arc(px, py, 5, 0, Math.PI*2); ctxChart.fill();
+            ctxChart.strokeStyle = "#fff"; ctxChart.stroke();
         });
     }
 
-    // --- CSV EXPORT ---
-    window.exportCSV = function() {
-        if(shotHistory.length === 0) { alert("Keine Daten vorhanden."); return; }
-        
-        let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "ID;Spieler;Winkel(Grad);Kraft(%);Wind;Weite(Pixel)\n"; // Header
 
-        shotHistory.forEach(function(row) {
-            let rowStr = `${row.id};${row.player};${row.angle};${row.power};${row.wind};${row.distance}`;
-            csvContent += rowStr + "\n";
-        });
-
-        // Download Link erzwingen
-        let encodedUri = encodeURI(csvContent);
-        let link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "ballerburg_messdaten.csv");
-        document.body.appendChild(link); // Required for FF
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    // --- STEUERUNG (MAUS) ---
-    // Zurück zur klassischen Maussteuerung (V5)
+    // --- UNIFIED INPUT HANDLER (TOUCH & MOUSE) ---
+    // Dies ist der Schlüssel für Mobile!
     
-    function updateAimVector(mx, my) {
+    function getPointerPos(e) {
+        const rect = gameCanvas.getBoundingClientRect();
+        // Skalierung berechnen (Canvas interne Größe vs. Angezeigte Größe)
+        const scaleX = gameCanvas.width / rect.width;
+        const scaleY = gameCanvas.height / rect.height;
+
+        let clientX, clientY;
+
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    }
+
+    function handleInputStart(e) {
+        if (e.type === 'touchstart') e.preventDefault(); // Kein Scrollen
+        if (game.isAnimating) return;
+
+        const pos = getPointerPos(e);
+        const activeP = game.players[game.turn - 1];
+        
+        // Prüfen ob nah am Spieler
+        const dist = Math.hypot(pos.x - (activeP.x + 30), pos.y - (activeP.y + 30));
+        
+        if (dist < 150) { // Radius größer für Finger
+            game.isAiming = true;
+            updateAimVector(pos);
+        }
+    }
+
+    function handleInputMove(e) {
+        if (!game.isAiming) return;
+        if (e.type === 'touchmove') e.preventDefault(); // Kein Scrollen
+        const pos = getPointerPos(e);
+        updateAimVector(pos);
+    }
+
+    function handleInputEnd(e) {
+        if (game.isAiming) {
+            if (e.type === 'touchend') e.preventDefault();
+            fire();
+            game.isAiming = false;
+        }
+    }
+
+    function updateAimVector(pos) {
         const activeP = game.players[game.turn - 1];
         const cx = activeP.x + activeP.w / 2;
         const cy = activeP.y + activeP.h / 2;
-        let dx = mx - cx; let dy = my - cy;
-        let dist = Math.hypot(dx, dy);
         
-        // Winkel
-        let rad = Math.atan2(-dy, Math.abs(dx)); // Immer positiv relativ zum Boden
+        let dx = pos.x - cx;
+        let dy = pos.y - cy;
+        let dist = Math.hypot(dx, dy);
+        let rad = Math.atan2(-dy, Math.abs(dx));
         let deg = rad * (180 / Math.PI);
         if (deg < 0) deg = 0;
 
@@ -494,33 +496,25 @@ window.addEventListener('load', function() {
         }
     }
 
-    gameCanvas.addEventListener('mousedown', (e) => {
-        if (game.isAnimating) return;
-        const rect = gameCanvas.getBoundingClientRect();
+    function fire() {
         const activeP = game.players[game.turn - 1];
-        if (Math.hypot((e.clientX-rect.left) - (activeP.x + 30), (e.clientY-rect.top) - (activeP.y + 30)) < 150) {
-            game.isAiming = true;
-            updateAimVector(e.clientX - rect.left, e.clientY - rect.top);
-        }
-    });
+        game.ball = {
+            x: activeP.x + activeP.w / 2, y: activeP.y + activeP.h / 2,
+            vx: game.aimVector.x * POWER_SCALE, vy: game.aimVector.y * POWER_SCALE
+        };
+        game.isAnimating = true;
+        uiStatus.innerText = "";
+    }
 
-    window.addEventListener('mousemove', (e) => {
-        if (!game.isAiming) return;
-        const rect = gameCanvas.getBoundingClientRect();
-        updateAimVector(e.clientX - rect.left, e.clientY - rect.top);
-    });
+    // --- EVENT LISTENERS (Unified) ---
+    gameCanvas.addEventListener('mousedown', handleInputStart);
+    gameCanvas.addEventListener('touchstart', handleInputStart, {passive: false});
 
-    window.addEventListener('mouseup', () => {
-        if (game.isAiming) {
-            const activeP = game.players[game.turn - 1];
-            game.ball = {
-                x: activeP.x + activeP.w / 2, y: activeP.y + activeP.h / 2,
-                vx: game.aimVector.x * POWER_SCALE, vy: game.aimVector.y * POWER_SCALE
-            };
-            game.isAnimating = true;
-            game.isAiming = false;
-        }
-    });
+    window.addEventListener('mousemove', handleInputMove);
+    window.addEventListener('touchmove', handleInputMove, {passive: false});
+
+    window.addEventListener('mouseup', handleInputEnd);
+    window.addEventListener('touchend', handleInputEnd, {passive: false});
 
     // --- HELPER ---
     function drawAimLine() {
@@ -528,24 +522,32 @@ window.addEventListener('load', function() {
         const cx = activeP.x + activeP.w / 2; const cy = activeP.y + activeP.h / 2;
         let intensity = Math.min(1, game.aimVector.power / MAX_DRAG_DIST); 
         ctx.strokeStyle = `rgb(${255},${Math.floor(255*(1-intensity))},0)`;
-        ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + game.aimVector.x, cy + game.aimVector.y); ctx.stroke();
+        ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + game.aimVector.x, cy + game.aimVector.y); ctx.stroke();
     }
-    function drawTrajectory() {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
-        game.trajectoryPoints.forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, 3, 0, Math.PI*2); ctx.fill(); });
-    }
+    function drawTrajectory() { ctx.fillStyle = "rgba(255, 255, 255, 0.5)"; game.trajectoryPoints.forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, 4, 0, Math.PI*2); ctx.fill(); }); }
     function createExplosion(x, y, color) { for (let i = 0; i < 20; i++) game.particles.push({x:x,y:y,vx:(Math.random()-0.5)*10,vy:(Math.random()-0.5)*10,life:30+Math.random()*20,r:Math.random()*5,color:color}); }
     function checkRectCollide(bx, by, rect) { return bx > rect.x && bx < rect.x + rect.w && by > rect.y && by < rect.y + rect.h; }
     function endTurn() { game.ball = null; game.isAnimating = false; game.turn = game.turn === 1 ? 2 : 1; if(game.windEnabled) randomizeWind(); else game.wind=0; updateUI(); }
     function randomizeWind() { game.wind = (Math.random() * 3) - 1.5; }
     function updateUI() { 
-        uiStatus.innerText = game.players[game.turn-1].name + " ist dran"; 
+        uiStatus.innerText = game.players[game.turn-1].name + " ZIELT"; 
         uiStatus.style.color = game.players[game.turn-1].color;
         let dir = game.wind > 0 ? "→" : (Math.abs(game.wind)<0.1?"•":"←"); 
         uiWind.innerText = `Wind: ${dir} ${Math.abs(game.wind).toFixed(2)}`;
     }
     
+    // CSV Export
+    window.exportCSV = function() {
+        if(shotHistory.length === 0) { alert("Keine Daten."); return; }
+        let csvContent = "data:text/csv;charset=utf-8,ID;Spieler;Winkel;Kraft;Distanz\n";
+        shotHistory.forEach(r => { csvContent += `${r.id};${r.player};${r.angle};${r.power};${r.distance}\n`; });
+        let encodedUri = encodeURI(csvContent);
+        let link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "ballerburg_data.csv");
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    };
+
     checkWind.addEventListener('change', (e) => { game.windEnabled = e.target.checked; if(!game.windEnabled) game.wind = 0; updateUI(); });
     btnReset.addEventListener('click', init);
 
