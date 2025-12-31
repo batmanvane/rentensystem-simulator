@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ballerburg V6: Mobile Sensors</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #2c3e50;
+            color: white;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 100vh; margin: 0; overflow: hidden;
+            touch-action: none; /* Verhindert Scrollen auf Mobile */
+        }
+
+        #game-wrapper {
+            position: relative;
+            border: 5px solid #34495e;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            background: #000;
+            /* RESPONSIVE CSS */
+            width: 95%;
+            max-width: 800px;
+            aspect-ratio: 800 / 500;
+        }
+
+        canvas { 
+            display: block; 
+            width: 100%; 
+            height: 100%; 
+            cursor: crosshair; 
+        }
+
+        /* UI LAYER */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 10px; box-sizing: border-box;
+        }
+
+        .top-bar { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 5px;}
+        
+        .hud-box {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 6px 12px; border-radius: 8px; font-weight: bold; font-size: 14px;
+            pointer-events: auto; display: flex; align-items: center; gap: 8px;
+            backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .message-center {
+            position: absolute; top: 15%; width: 100%; text-align: center;
+            font-size: clamp(20px, 5vw, 32px); /* Responsive Font Size */
+            font-weight: 900; text-shadow: 2px 2px 0 #000;
+            pointer-events: none; z-index: 10;
+        }
+
+        /* DATA PANEL UNTEN */
+        .bottom-bar { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            margin-bottom: 5px; 
+            pointer-events: auto;
+            gap: 10px;
+        }
+        
+        .data-panel {
+            background: rgba(0, 20, 40, 0.9);
+            border: 2px solid #3498db;
+            color: #3498db; /* Default Blue */
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: clamp(14px, 4vw, 20px);
+            font-weight: bold;
+            display: flex; gap: 20px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            min-width: 250px;
+            justify-content: center;
+            transition: color 0.3s, border-color 0.3s;
+        }
+        
+        .data-value { color: #fff; margin-left: 5px; }
+
+        /* Mobile Controls */
+        #mobile-controls {
+            display: flex; gap: 10px;
+        }
+
+        button {
+            background: #e67e22; border: none; color: white;
+            padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;
+            font-size: 14px;
+        }
+        
+        #btn-fire {
+            background: #c0392b;
+            padding: 15px 40px;
+            font-size: 20px;
+            border: 2px solid white;
+            box-shadow: 0 0 10px red;
+            display: none; /* Erst sichtbar wenn Sensoren an */
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        
+        <div id="ui-layer">
+            <div class="top-bar">
+                <div class="hud-box">
+                    <input type="checkbox" id="windCheck" checked> <label for="windCheck">Wind</label>
+                </div>
+                
+                <div class="hud-box">
+                    <span id="windDisplay">Wind: 0</span>
+                    <button id="reset-btn">Reset</button>
+                </div>
+            </div>
+
+            <div class="message-center" id="statusText">Lade...</div>
+
+            <div class="bottom-bar">
+                
+                <div id="mobile-controls">
+                    <button id="btn-sensor">📡 Sensoren aktivieren</button>
+                    <button id="btn-fire">FEUER!</button>
+                </div>
+
+                <div class="data-panel" id="dataPanel">
+                    <span>Warten...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+window.addEventListener('load', function() {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // UI Refs
+    const uiStatus = document.getElementById('statusText');
+    const uiWind = document.getElementById('windDisplay');
+    const uiData = document.getElementById('dataPanel');
+    const btnReset = document.getElementById('reset-btn');
+    const btnSensor = document.getElementById('btn-sensor');
+    const btnFire = document.getElementById('btn-fire');
+
+    // KONSTANTEN
+    const GROUND_Y = 450;
+    const GRAVITY = 0.25;
+    const POWER_SCALE = 0.18; 
+    const WIND_SCALE = 0.06;
+    const MAX_DRAG_DIST = 250; 
+
+    // GAME STATE
+    let game = {
+        turn: 1,
+        wind: 0,
+        windEnabled: true,
+        trajEnabled: true,
+        isAnimating: false,
+        isAiming: false,
+        aimVector: { x: 0, y: 0, power: 0, angle: 0 },
+        ball: null,
+        particles: [],
+        players: [],
+        obstacle: { x: 350, y: GROUND_Y - 180, w: 100, h: 180, color: '#7f8c8d' },
+        trajectoryPoints: [],
+        sensorMode: false // Sensorsteuerung aktiv?
+    };
+
+    function init() {
+        game.players = [
+            { id: 1, x: 50, y: GROUND_Y - 60, w: 60, h: 60, hp: 100, color: '#3498db', name: "BLAU" },
+            { id: 2, x: 690, y: GROUND_Y - 60, w: 60, h: 60, hp: 100, color: '#e74c3c', name: "ROT" }
+        ];
+        game.ball = null;
+        game.particles = [];
+        game.isAnimating = false;
+        game.isAiming = false;
+        game.turn = 1;
+        randomizeWind();
+        updateUI();
+        updateDataPanel(false);
+        requestAnimationFrame(loop);
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    function update() {
+        // BALL & KOLLISION
+        if (game.ball) {
+            game.ball.vy += GRAVITY;
+            game.ball.vx += game.wind * WIND_SCALE;
+            game.ball.x += game.ball.vx;
+            game.ball.y += game.ball.vy;
+            updateDataPanel(true);
+
+            let hit = false;
+            if (game.ball.y >= GROUND_Y) { createExplosion(game.ball.x, GROUND_Y, "#27ae60"); hit = true; }
+            else if (checkRectCollide(game.ball.x, game.ball.y, game.obstacle)) { createExplosion(game.ball.x, game.ball.y, game.obstacle.color); hit = true; }
+            else if (game.ball.x < -100 || game.ball.x > canvas.width + 100) { hit = true; }
+            else {
+                let enemy = game.players[game.turn === 1 ? 1 : 0];
+                if (checkRectCollide(game.ball.x, game.ball.y, enemy)) {
+                    enemy.hp -= 35;
+                    createExplosion(game.ball.x, game.ball.y, enemy.color);
+                    if (enemy.hp <= 0) finishGame(game.players[game.turn - 1].name);
+                    else hit = true;
+                }
+            }
+            if (hit) endTurn();
+        }
+
+        // Partikel
+        for (let i = game.particles.length - 1; i >= 0; i--) {
+            let p = game.particles[i];
+            p.life--; p.x += p.vx; p.y += p.vy;
+            if (p.life <= 0) game.particles.splice(i, 1);
+        }
+    }
+
+    function draw() {
+        // Responsive Scaling Factor für Mouse/Touch Berechnungen
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        // HIMMEL
+        const grad = ctx.createLinearGradient(0, 0, 0, 500);
+        grad.addColorStop(0, "#87CEEB"); grad.addColorStop(1, "#E0F6FF");
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // HINDERNIS & BODEN
+        ctx.fillStyle = game.obstacle.color; ctx.fillRect(game.obstacle.x, game.obstacle.y, game.obstacle.w, game.obstacle.h);
+        ctx.strokeStyle = "#566573"; ctx.lineWidth = 3; ctx.strokeRect(game.obstacle.x, game.obstacle.y, game.obstacle.w, game.obstacle.h);
+        ctx.fillStyle = "#27ae60"; ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+
+        // BURGEN
+        game.players.forEach(p => {
+            if (p.hp > 0) {
+                ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.fillStyle = "#000"; ctx.fillRect(p.x + 15, p.y + 25, 10, 20); ctx.fillRect(p.x + 35, p.y + 25, 10, 20);
+                drawHealthBar(p);
+            }
+        });
+
+        // VISUALISIERUNG (Sensor oder Maus)
+        // Bei Sensor-Modus zielen wir immer, solange kein Ball fliegt
+        let showAim = (game.isAiming || game.sensorMode) && !game.isAnimating;
+        
+        if (showAim) {
+            drawAimLine();
+            if (game.trajEnabled) drawTrajectory();
+        }
+
+        // BALL
+        if (game.ball) {
+            ctx.fillStyle = "#2c3e50"; ctx.beginPath();
+            ctx.arc(game.ball.x, game.ball.y, 6, 0, Math.PI*2); ctx.fill();
+        }
+
+        // Partikel
+        game.particles.forEach(p => { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill(); });
+    }
+
+    // --- SENSOR LOGIK ---
+    
+    // Mapping Funktion (Wert, MinInput, MaxInput, MinOut, MaxOut)
+    function map(x, in_min, in_max, out_min, out_max) {
+        return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+    }
+
+    function handleOrientation(event) {
+        if (!game.sensorMode || game.isAnimating) return;
+
+        // Gamma (Links/Rechts Tilt): -90 bis 90
+        // Beta (Vorne/Hinten Tilt): -180 bis 180
+        
+        let tiltLR = event.gamma; // Neigung links/rechts
+        let tiltFB = event.beta;  // Neigung vorne/hinten
+
+        // Input Glätten / Begrenzen
+        if (tiltLR < -60) tiltLR = -60;
+        if (tiltLR > 60) tiltLR = 60;
+        if (tiltFB < 0) tiltFB = 0; // Nur nach hinten kippen zählt als Power
+        if (tiltFB > 90) tiltFB = 90;
+
+        // LOGIK:
+        // Winkel: Wir nutzen Gamma. 
+        // 0° ist flach. 90° ist hoch.
+        // Wenn Gamma 0 (Handy flach) -> 45 Grad? 
+        // Wir mappen Gamma -45 bis +45 auf Winkel 90 bis 0
+        
+        // Spieler 1 (Links): 
+        // Wir wollen nach rechts schießen. 
+        // Handy links kippen (-Gamma) -> Hoher Winkel
+        // Handy rechts kippen (+Gamma) -> Flacher Winkel
+        
+        let targetAngle = 45;
+        if (game.turn === 1) {
+             targetAngle = map(tiltLR, -45, 45, 90, 0);
+        } else {
+            // Spieler 2 (Rechts): Spiegelverkehrt
+             targetAngle = map(tiltLR, -45, 45, 90, 180); // 90 bis 180 Grad
+        }
+
+        // Power: Beta (Handy aufrichten = mehr Power)
+        // Flach (0) = 20% Power, Aufrecht (80) = 100% Power
+        let targetPowerPct = map(tiltFB, 0, 70, 0.2, 1.0);
+        if(targetPowerPct > 1) targetPowerPct = 1;
+        
+        let powerPx = targetPowerPct * MAX_DRAG_DIST;
+        
+        // Vektor aus Winkel und Power berechnen
+        let rad = targetAngle * (Math.PI / 180);
+        
+        // Achtung: Canvas Y ist negativ nach oben
+        let dx = Math.cos(rad) * powerPx; // Normaler Kreis
+        let dy = -Math.sin(rad) * powerPx; // Minus für "nach oben"
+
+        // Wenn Spieler 1, muss dx positiv sein. Wenn Spieler 2, negativ (relativ zur Burg)
+        // Aber Cosinus regelt das schon, wenn wir Winkel 0-180 nutzen.
+        // Für S1: Winkel 0-90 (Cos ist +). Für S2: Winkel 90-180 (Cos ist -). Passt!
+
+        // Aber Moment, S1 zielt nach Rechts. Winkel 0 ist Rechts. Winkel 90 ist Oben.
+        // S2 zielt nach Links. Winkel 180 ist Links.
+        // Die Berechnung oben passt.
+        
+        if (game.turn === 1) {
+             // Korrektur: Wir wollen, dass 0 Grad = Rechts ist. 
+             // Oben mapping war: -45(LinksKipp) -> 90(Oben), 45(RechtsKipp) -> 0(Rechts)
+             // Passt.
+        } else {
+             // S2: -45(LinksKipp) -> 90(Oben), 45(RechtsKipp) -> 180(Links)
+             // Passt.
+        }
+
+        game.aimVector = {
+            x: dx,
+            y: dy, // dy ist hier schon der Vektor-Anteil
+            power: powerPx,
+            angle: targetAngle
+        };
+
+        updateDataPanel(false);
+        if (game.trajEnabled) calculateTrajectory();
+    }
+
+    // --- STEUERUNG ---
+
+    function enableSensors() {
+        // iOS Anfrage
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response == 'granted') {
+                        startSensorMode();
+                    } else {
+                        alert("Sensor-Zugriff verweigert.");
+                    }
+                })
+                .catch(console.error);
+        } else {
+            // Android / Non-iOS
+            startSensorMode();
+        }
+    }
+
+    function startSensorMode() {
+        game.sensorMode = true;
+        window.addEventListener('deviceorientation', handleOrientation);
+        btnSensor.style.display = 'none';
+        btnFire.style.display = 'block';
+        alert("Sensoren aktiv!\n\nKippen L/R = Winkel\nKippen V/H = Kraft\n\nDrücke den roten Knopf zum Feuern!");
+    }
+
+    // Touch Events für Drag & Drop (wenn man keine Sensoren nutzt)
+    canvas.addEventListener('touchstart', (e) => {
+        if(game.sensorMode) return;
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        handleInputStart(touch.clientX - rect.left, touch.clientY - rect.top, rect);
+    }, {passive: false});
+
+    canvas.addEventListener('touchmove', (e) => {
+        if(game.sensorMode) return;
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        updateAimVector(touch.clientX - rect.left, touch.clientY - rect.top, rect);
+    }, {passive: false});
+
+    canvas.addEventListener('touchend', (e) => {
+        if(game.sensorMode) return;
+        e.preventDefault();
+        if (game.isAiming) { fire(); game.isAiming = false; game.trajectoryPoints = []; }
+    });
+
+    // Maus Events
+    canvas.addEventListener('mousedown', (e) => {
+        if(game.sensorMode) return;
+        const rect = canvas.getBoundingClientRect();
+        handleInputStart(e.clientX - rect.left, e.clientY - rect.top, rect);
+    });
+    window.addEventListener('mousemove', (e) => {
+        if(game.sensorMode || !game.isAiming) return;
+        const rect = canvas.getBoundingClientRect();
+        updateAimVector(e.clientX - rect.left, e.clientY - rect.top, rect);
+    });
+    window.addEventListener('mouseup', () => {
+        if(game.sensorMode) return;
+        if (game.isAiming) { fire(); game.isAiming = false; game.trajectoryPoints = []; }
+    });
+
+    // Gemeinsame Input Funktion
+    function handleInputStart(mx, my, rect) {
+        if (game.isAnimating || game.ball) return;
+        // Skalierung beachten!
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        mx *= scaleX; my *= scaleY;
+
+        const activeP = game.players[game.turn - 1];
+        if (Math.hypot(mx - (activeP.x + 30), my - (activeP.y + 30)) < 150) {
+            game.isAiming = true;
+            // updateAimVector wird durch move getriggert oder hier initial
+        }
+    }
+
+    function updateAimVector(mx, my, rect) {
+        // Skalierung beachten
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        mx *= scaleX; my *= scaleY;
+
+        const activeP = game.players[game.turn - 1];
+        const cx = activeP.x + activeP.w / 2;
+        const cy = activeP.y + activeP.h / 2;
+        
+        let dx = mx - cx;
+        let dy = my - cy;
+        
+        let dist = Math.hypot(dx, dy);
+        
+        // Winkel Berechnung
+        // Math.atan2(y, x). Wir nutzen y negativ, weil Canvas Y nach unten wächst
+        let rad = Math.atan2(-dy, dx); 
+        let deg = rad * (180 / Math.PI);
+        if(deg < 0) deg += 360;
+
+        // Limitieren
+        if (dist > MAX_DRAG_DIST) {
+            dx = (dx / dist) * MAX_DRAG_DIST;
+            dy = (dy / dist) * MAX_DRAG_DIST;
+            dist = MAX_DRAG_DIST;
+        }
+        
+        game.aimVector = { 
+            x: dx, y: dy, 
+            power: dist, 
+            angle: deg 
+        };
+        
+        updateDataPanel(false);
+        if (game.trajEnabled) calculateTrajectory();
+    }
+
+
+    // --- UI UPDATES ---
+    function updateDataPanel(inFlight) {
+        const pColor = game.players[game.turn - 1].color;
+        const pName = game.players[game.turn - 1].name;
+
+        // Panel Farbe anpassen
+        uiData.style.borderColor = pColor;
+        uiData.style.color = pColor;
+        uiData.style.boxShadow = `0 0 15px ${pColor}40`; // 40 ist alpha hex
+
+        if (inFlight && game.ball) {
+            let vTotal = Math.hypot(game.ball.vx, game.ball.vy);
+            let energy = Math.round(0.5 * (vTotal * vTotal) * 10);
+            uiData.innerHTML = `STATUS: <span class="data-value" style="color:white">FLUG</span> 
+                                E: <span class="data-value" style="color:${pColor}">${energy} J</span>`;
+        } else if (game.isAiming || game.sensorMode) {
+            let powerPct = Math.round((game.aimVector.power / MAX_DRAG_DIST) * 100);
+            let angle = Math.round(game.aimVector.angle);
+            // Winkel für Spieler 2 "normalisieren" (sodass 0 flach ist)
+            if(game.turn === 2) angle = 180 - angle;
+
+            uiData.innerHTML = `WINKEL: <span class="data-value" style="color:white">${Math.abs(angle)}°</span> 
+                                PULVER: <span class="data-value" style="color:white">${powerPct}%</span>`;
+        } else {
+            // HIER IST DER FIX FÜR DIE FARBE BEIM TEXT "ZIELEN..."
+            uiData.innerHTML = `<span style="color:${pColor}">${pName}: Zielen zum Starten...</span>`;
+        }
+    }
+
+    // --- GAMEPLAY CORE ---
+    function fire() {
+        if (game.isAnimating) return;
+        const activeP = game.players[game.turn - 1];
+        game.ball = {
+            x: activeP.x + activeP.w / 2, y: activeP.y + activeP.h / 2,
+            vx: game.aimVector.x * POWER_SCALE, vy: game.aimVector.y * POWER_SCALE
+        };
+        game.isAnimating = true;
+        uiStatus.innerText = "";
+    }
+
+    function calculateTrajectory() {
+        game.trajectoryPoints = [];
+        const activeP = game.players[game.turn - 1];
+        let simX = activeP.x + activeP.w / 2;
+        let simY = activeP.y + activeP.h / 2;
+        let simVX = game.aimVector.x * POWER_SCALE;
+        let simVY = game.aimVector.y * POWER_SCALE;
+
+        for (let i = 0; i < 150; i++) {
+            simVY += GRAVITY; simVX += game.wind * WIND_SCALE;
+            simX += simVX; simY += simVY;
+            if (i % 4 === 0) game.trajectoryPoints.push({x: simX, y: simY});
+            if (simY >= GROUND_Y || checkRectCollide(simX, simY, game.obstacle)) break;
+        }
+    }
+
+    function drawAimLine() {
+        const activeP = game.players[game.turn - 1];
+        const cx = activeP.x + activeP.w / 2; const cy = activeP.y + activeP.h / 2;
+        let intensity = Math.min(1, game.aimVector.power / MAX_DRAG_DIST); 
+        ctx.strokeStyle = `rgb(${255},${Math.floor(255*(1-intensity))},0)`;
+        ctx.lineWidth = 3 + (intensity*4); ctx.beginPath(); ctx.moveTo(cx, cy);
+        
+        // Bei Sensor Mode nutzen wir den gespeicherten AimVektor direkt
+        if (game.sensorMode) {
+             ctx.lineTo(cx + game.aimVector.x, cy + game.aimVector.y);
+        } else {
+             // Bei Maus nutzen wir auch den Vektor
+             ctx.lineTo(cx + game.aimVector.x, cy + game.aimVector.y); 
+        }
+        ctx.stroke();
+    }
+    
+    function drawHealthBar(p) {
+        ctx.fillStyle = "#000"; ctx.fillRect(p.x, p.y - 25, p.w, 8);
+        ctx.fillStyle = (p.hp/100) > 0.5 ? "#2ecc71" : "#e74c3c";
+        ctx.fillRect(p.x + 1, p.y - 24, (p.w - 2) * Math.max(0, p.hp/100), 6);
+    }
+    
+    function createExplosion(x, y, color) {
+        for (let i = 0; i < 20; i++) {
+            game.particles.push({x: x, y: y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 30+Math.random()*20, r: Math.random()*5+2, color: color});
+        }
+    }
+    
+    function checkRectCollide(bx, by, rect) { return bx > rect.x && bx < rect.x + rect.w && by > rect.y && by < rect.y + rect.h; }
+    
+    function endTurn() { 
+        game.ball = null; game.isAnimating = false; game.turn = game.turn === 1 ? 2 : 1; 
+        randomizeWind(); updateUI(); updateDataPanel(false); 
+    }
+    
+    function finishGame(winner) { 
+        game.ball = null; uiStatus.innerText = winner + " GEWINNT!"; uiStatus.style.color = "#f1c40f"; 
+        setTimeout(() => { if(confirm("Nochmal?")) init(); }, 500); 
+    }
+    
+    function randomizeWind() { game.wind = game.windEnabled ? (Math.random() * 3) - 1.5 : 0; }
+    
+    function updateUI() {
+        const p = game.players[game.turn - 1]; uiStatus.innerText = p.name + " ist am Zug"; uiStatus.style.color = p.color;
+        let dir = game.wind > 0 ? "→" : (Math.abs(game.wind) < 0.1 ? "•" : "←"); uiWind.innerText = `Wind: ${dir} ${Math.abs(game.wind).toFixed(1)}`;
+    }
+
+    // Events
+    btnSensor.addEventListener('click', enableSensors);
+    btnFire.addEventListener('click', fire);
+    document.getElementById('windCheck').addEventListener('change', (e) => { game.windEnabled = e.target.checked; randomizeWind(); updateUI(); });
+    btnReset.addEventListener('click', init);
+
+    init();
+});
+</script>
+</body>
+</html>
